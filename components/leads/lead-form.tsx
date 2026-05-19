@@ -7,23 +7,18 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Select } from '@/components/ui/select'
 import { FormField, FormGrid, FormSection } from '@/components/ui/form-field'
-import type { Lead } from '@/lib/types'
+import { LEAD_STATUSES, LEAD_PRIORITIES, SOURCES, JEWELRY_TYPES, DIAMOND_TYPES, GOLD_TYPES } from '@/lib/constants'
+import type { Lead, Customer } from '@/lib/types'
 
 interface LeadFormProps {
   open: boolean
   onClose: () => void
   lead?: Lead
+  customers?: Customer[]
   onSave: (data: Partial<Lead>) => void
 }
 
-const STATUS_OPTIONS = ['חדש', 'בטיפול', 'ממתין', 'הומר', 'נסגר']
-const PRIORITY_OPTIONS = ['גבוה', 'בינוני', 'נמוך']
-const SOURCE_OPTIONS = ['אינסטגרם', 'פייסבוק', 'המלצה', 'אתר', 'גוגל', 'אחר']
-const JEWELRY_OPTIONS = ['טבעת אירוסין', 'טבעת נישואין', 'עגילים', 'שרשרת', 'צמיד', 'תליון', 'אחר']
-const DIAMOND_OPTIONS = ['עגול', 'מרקיז', 'אובל', 'כרית', 'נסיכה', 'אמרלד', 'לב', 'אחר']
-const GOLD_OPTIONS = ['14K', '18K', '9K']
-
-export function LeadForm({ open, onClose, lead, onSave }: LeadFormProps) {
+export function LeadForm({ open, onClose, lead, customers = [], onSave }: LeadFormProps) {
   const [form, setForm] = useState<Partial<Lead>>(
     lead || { lead_status: 'חדש', priority: 'בינוני' }
   )
@@ -72,7 +67,7 @@ export function LeadForm({ open, onClose, lead, onSave }: LeadFormProps) {
             <FormField label="מקור" htmlFor="source">
               <Select id="source" value={form.source || ''} onChange={e => set('source', e.target.value)}>
                 <option value="">בחר מקור</option>
-                {SOURCE_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+                {SOURCES.map(s => <option key={s} value={s}>{s}</option>)}
               </Select>
             </FormField>
             <FormField label="תקציב (₪)" htmlFor="budget">
@@ -92,19 +87,19 @@ export function LeadForm({ open, onClose, lead, onSave }: LeadFormProps) {
             <FormField label="סוג תכשיט" htmlFor="jewelry_type">
               <Select id="jewelry_type" value={form.jewelry_type || ''} onChange={e => set('jewelry_type', e.target.value)}>
                 <option value="">בחר</option>
-                {JEWELRY_OPTIONS.map(j => <option key={j} value={j}>{j}</option>)}
+                {JEWELRY_TYPES.map(j => <option key={j} value={j}>{j}</option>)}
               </Select>
             </FormField>
             <FormField label="סוג יהלום" htmlFor="diamond_type">
               <Select id="diamond_type" value={form.diamond_type || ''} onChange={e => set('diamond_type', e.target.value)}>
                 <option value="">בחר</option>
-                {DIAMOND_OPTIONS.map(d => <option key={d} value={d}>{d}</option>)}
+                {DIAMOND_TYPES.map(d => <option key={d} value={d}>{d}</option>)}
               </Select>
             </FormField>
             <FormField label="סוג זהב" htmlFor="gold_type">
               <Select id="gold_type" value={form.gold_type || ''} onChange={e => set('gold_type', e.target.value)}>
                 <option value="">בחר</option>
-                {GOLD_OPTIONS.map(g => <option key={g} value={g}>{g}</option>)}
+                {GOLD_TYPES.map(g => <option key={g} value={g}>{g}</option>)}
               </Select>
             </FormField>
           </FormGrid>
@@ -114,12 +109,12 @@ export function LeadForm({ open, onClose, lead, onSave }: LeadFormProps) {
           <FormGrid>
             <FormField label="סטטוס" htmlFor="lead_status">
               <Select id="lead_status" value={form.lead_status || 'חדש'} onChange={e => set('lead_status', e.target.value)}>
-                {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+                {LEAD_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
               </Select>
             </FormField>
             <FormField label="עדיפות" htmlFor="priority">
               <Select id="priority" value={form.priority || 'בינוני'} onChange={e => set('priority', e.target.value)}>
-                {PRIORITY_OPTIONS.map(p => <option key={p} value={p}>{p}</option>)}
+                {LEAD_PRIORITIES.map(p => <option key={p} value={p}>{p}</option>)}
               </Select>
             </FormField>
             <FormField label="תאריך מעקב" htmlFor="follow_up_date">

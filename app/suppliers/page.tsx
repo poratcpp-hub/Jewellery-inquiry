@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { Shell } from '@/components/layout/shell'
 import { PageHeader } from '@/components/layout/page-header'
 import { Button } from '@/components/ui/button'
@@ -10,22 +10,20 @@ import { Select } from '@/components/ui/select'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
 import { Dialog, DialogHeader, DialogBody, DialogFooter } from '@/components/ui/dialog'
 import { FormField, FormGrid, FormSection } from '@/components/ui/form-field'
-import { demoSuppliers } from '@/lib/demo-data'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
+import { TableSkeleton } from '@/components/ui/skeleton'
+import { useToast } from '@/components/ui/toast'
+import { getSuppliers, upsertSupplier, deleteSupplier } from '@/lib/data'
+import { SUPPLIER_CATEGORIES } from '@/lib/constants'
 import type { Supplier } from '@/lib/types'
-import { Plus, Search, Pencil, Star } from 'lucide-react'
+import { Plus, Search, Pencil, Trash2, Star } from 'lucide-react'
 
 function StarRating({ value, onChange }: { value: number; onChange: (v: number) => void }) {
   return (
     <div className="flex gap-1">
       {[1, 2, 3, 4, 5].map(n => (
-        <button
-          key={n}
-          type="button"
-          onClick={() => onChange(n)}
-          className="text-[#b8934a] transition-opacity hover:opacity-100"
-          style={{ opacity: n <= value ? 1 : 0.3 }}
-        >
-          <Star size={18} fill={n <= value ? '#b8934a' : 'none'} />
+        <button key={n} type="button" onClick={() => onChange(n)} className="transition-opacity hover:opacity-100" style={{ opacity: n <= value ? 1 : 0.3 }}>
+          <Star size={18} className="text-[#b8934a]" fill={n <= value ? '#b8934a' : 'none'} />
         </button>
       ))}
     </div>
@@ -37,35 +35,32 @@ function StarDisplay({ value }: { value?: number }) {
   return (
     <div className="flex gap-0.5">
       {[1, 2, 3, 4, 5].map(n => (
-        <Star
-          key={n}
-          size={12}
-          className={n <= value ? 'text-[#b8934a]' : 'text-[#e5ddd0]'}
-          fill={n <= value ? '#b8934a' : '#e5ddd0'}
-        />
+        <Star key={n} size={12} className={n <= value ? 'text-[#b8934a]' : 'text-[#e5ddd0]'} fill={n <= value ? '#b8934a' : '#e5ddd0'} />
       ))}
     </div>
   )
 }
 
 function SupplierForm({ open, onClose, supplier, onSave }: {
-  open: boolean
-  onClose: () => void
-  supplier?: Supplier
+  open: boolean; onClose: () => void; supplier?: Supplier
   onSave: (data: Partial<Supplier>) => void
 }) {
   const [form, setForm] = useState<Partial<Supplier>>(supplier || {})
+  const [error, setError] = useState('')
   const set = (k: keyof Supplier, v: string | number) => setForm(f => ({ ...f, [k]: v }))
 
-  const CATEGORIES = ['יהלומים', 'זהב', 'כסף', 'ייצור', 'אריזה', 'משלוח', 'אחר']
+  const handleSave = () => {
+    if (!form.name?.trim()) { setError('שם הספק הוא שדה חובה'); return }
+    onSave(form); onClose()
+  }
 
   return (
     <Dialog open={open} onClose={onClose} className="max-w-xl mx-4">
       <DialogHeader title={supplier ? 'עריכת ספק' : 'ספק חדש'} onClose={onClose} />
       <DialogBody className="space-y-5">
         <FormSection title="פרטי ספק">
-          <FormField label="שם הספק" required htmlFor="sup_name">
-            <Input id="sup_name" value={form.name || ''} onChange={e => set('name', e.target.value)} placeholder="שם הספק" />
+          <FormField label="שם הספק" required error={error} htmlFor="sup_name">
+            <Input id="sup_name" value={form.name || ''} onChange={e => { set('name', e.target.value); setError('') }} placeholder="שם הספק" />
           </FormField>
           <FormGrid>
             <FormField label="איש קשר" htmlFor="sup_contact">
@@ -77,7 +72,7 @@ function SupplierForm({ open, onClose, supplier, onSave }: {
             <FormField label="קטגוריה" htmlFor="sup_category">
               <Select id="sup_category" value={form.category || ''} onChange={e => set('category', e.target.value)}>
                 <option value="">בחר קטגוריה</option>
-                {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                {SUPPLIER_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
               </Select>
             </FormField>
             <FormField label="מיקום" htmlFor="sup_location">
@@ -88,45 +83,47 @@ function SupplierForm({ open, onClose, supplier, onSave }: {
             </FormField>
           </FormGrid>
         </FormSection>
-
         <FormSection title="דירוג">
           <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-[#4a3728]">איכות</span>
-              <StarRating value={form.quality_rating || 0} onChange={v => set('quality_rating', v)} />
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-[#4a3728]">אמינות</span>
-              <StarRating value={form.reliability_rating || 0} onChange={v => set('reliability_rating', v)} />
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-[#4a3728]">מחיר</span>
-              <StarRating value={form.price_rating || 0} onChange={v => set('price_rating', v)} />
-            </div>
+            {[
+              { label: 'איכות', key: 'quality_rating' as keyof Supplier },
+              { label: 'אמינות', key: 'reliability_rating' as keyof Supplier },
+              { label: 'מחיר', key: 'price_rating' as keyof Supplier },
+            ].map(({ label, key }) => (
+              <div key={key} className="flex items-center justify-between">
+                <span className="text-sm text-[#4a3728]">{label}</span>
+                <StarRating value={(form[key] as number) || 0} onChange={v => set(key, v)} />
+              </div>
+            ))}
           </div>
         </FormSection>
-
         <FormSection title="הערות">
           <Textarea value={form.notes || ''} onChange={e => set('notes', e.target.value)} placeholder="הערות על הספק..." rows={3} />
         </FormSection>
       </DialogBody>
       <DialogFooter>
         <Button variant="outline" onClick={onClose}>ביטול</Button>
-        <Button onClick={() => { if (form.name) { onSave(form); onClose() } }}>
-          {supplier ? 'שמור שינויים' : 'הוסף ספק'}
-        </Button>
+        <Button onClick={handleSave}>{supplier ? 'שמור שינויים' : 'הוסף ספק'}</Button>
       </DialogFooter>
     </Dialog>
   )
 }
 
 export default function SuppliersPage() {
-  const [suppliers, setSuppliers] = useState<Supplier[]>(
-    demoSuppliers.map(s => ({ ...s, created_at: new Date().toISOString() }))
-  )
+  const { toast } = useToast()
+  const [suppliers, setSuppliers] = useState<Supplier[]>([])
+  const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<Supplier | undefined>()
+  const [deleteTarget, setDeleteTarget] = useState<Supplier | undefined>()
+
+  useEffect(() => {
+    getSuppliers()
+      .then(setSuppliers)
+      .catch(() => toast({ type: 'error', title: 'שגיאה בטעינת ספקים' }))
+      .finally(() => setLoading(false))
+  }, [])
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase()
@@ -137,17 +134,32 @@ export default function SuppliersPage() {
     )
   }, [suppliers, search])
 
-  const handleSave = (data: Partial<Supplier>) => {
-    if (editing) {
-      setSuppliers(prev => prev.map(s => s.id === editing.id ? { ...s, ...data } : s))
-    } else {
-      setSuppliers(prev => [{
-        ...data as Supplier,
-        id: Math.random().toString(36).slice(2),
-        created_at: new Date().toISOString(),
-      }, ...prev])
+  const handleSave = async (data: Partial<Supplier>) => {
+    try {
+      const saved = await upsertSupplier(editing ? { ...editing, ...data } : data)
+      if (editing) {
+        setSuppliers(prev => prev.map(s => s.id === editing.id ? saved : s))
+        toast({ type: 'success', title: 'הספק עודכן' })
+      } else {
+        setSuppliers(prev => [{ ...saved, id: saved.id || Math.random().toString(36).slice(2) }, ...prev])
+        toast({ type: 'success', title: 'ספק חדש נוסף' })
+      }
+    } catch {
+      toast({ type: 'error', title: 'שגיאה בשמירת הספק' })
     }
     setEditing(undefined)
+  }
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return
+    try {
+      await deleteSupplier(deleteTarget.id)
+      setSuppliers(prev => prev.filter(s => s.id !== deleteTarget.id))
+      toast({ type: 'success', title: 'הספק נמחק' })
+    } catch {
+      toast({ type: 'error', title: 'שגיאה במחיקת הספק' })
+    }
+    setDeleteTarget(undefined)
   }
 
   return (
@@ -170,63 +182,71 @@ export default function SuppliersPage() {
         </div>
 
         <div className="bg-white rounded-xl border border-[#e5ddd0] shadow-[0_1px_8px_rgba(26,18,9,0.06)] overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>שם ספק</TableHead>
-                <TableHead className="hidden sm:table-cell">קטגוריה</TableHead>
-                <TableHead className="hidden md:table-cell">טלפון</TableHead>
-                <TableHead className="hidden md:table-cell">מיקום</TableHead>
-                <TableHead className="hidden lg:table-cell">זמן אספקה</TableHead>
-                <TableHead className="hidden sm:table-cell">איכות</TableHead>
-                <TableHead className="hidden lg:table-cell">אמינות</TableHead>
-                <TableHead className="hidden lg:table-cell">מחיר</TableHead>
-                <TableHead>פעולות</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filtered.length === 0 && (
+          {loading ? <TableSkeleton rows={4} cols={6} /> : (
+            <Table>
+              <TableHeader>
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center text-[#7a6a52] py-12">
-                    לא נמצאו ספקים
-                  </TableCell>
+                  <TableHead>שם ספק</TableHead>
+                  <TableHead className="hidden sm:table-cell">קטגוריה</TableHead>
+                  <TableHead className="hidden md:table-cell">טלפון</TableHead>
+                  <TableHead className="hidden md:table-cell">מיקום</TableHead>
+                  <TableHead className="hidden lg:table-cell">זמן אספקה</TableHead>
+                  <TableHead className="hidden sm:table-cell">איכות</TableHead>
+                  <TableHead className="hidden lg:table-cell">אמינות</TableHead>
+                  <TableHead className="hidden lg:table-cell">מחיר</TableHead>
+                  <TableHead>פעולות</TableHead>
                 </TableRow>
-              )}
-              {filtered.map(supplier => (
-                <TableRow key={supplier.id}>
-                  <TableCell>
-                    <div className="font-medium text-[#2c1810]">{supplier.name}</div>
-                    {supplier.contact_name && (
-                      <div className="text-xs text-[#7a6a52]">{supplier.contact_name}</div>
-                    )}
-                  </TableCell>
-                  <TableCell className="hidden sm:table-cell">
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-[#f5efe0] text-[#4a3728]">
-                      {supplier.category || '—'}
-                    </span>
-                  </TableCell>
-                  <TableCell className="hidden md:table-cell text-[#7a6a52]">{supplier.phone || '—'}</TableCell>
-                  <TableCell className="hidden md:table-cell text-[#7a6a52]">{supplier.location || '—'}</TableCell>
-                  <TableCell className="hidden lg:table-cell text-[#7a6a52]">{supplier.delivery_time || '—'}</TableCell>
-                  <TableCell className="hidden sm:table-cell"><StarDisplay value={supplier.quality_rating} /></TableCell>
-                  <TableCell className="hidden lg:table-cell"><StarDisplay value={supplier.reliability_rating} /></TableCell>
-                  <TableCell className="hidden lg:table-cell"><StarDisplay value={supplier.price_rating} /></TableCell>
-                  <TableCell>
-                    <Button variant="ghost" size="icon" onClick={() => { setEditing(supplier); setFormOpen(true) }} title="עריכה">
-                      <Pencil size={15} />
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {filtered.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={9} className="text-center text-[#7a6a52] py-12">
+                      {search ? 'לא נמצאו ספקים' : 'אין ספקים עדיין — הוסף ספק ראשון'}
+                    </TableCell>
+                  </TableRow>
+                )}
+                {filtered.map(supplier => (
+                  <TableRow key={supplier.id}>
+                    <TableCell>
+                      <div className="font-medium text-[#2c1810]">{supplier.name}</div>
+                      {supplier.contact_name && <div className="text-xs text-[#7a6a52]">{supplier.contact_name}</div>}
+                    </TableCell>
+                    <TableCell className="hidden sm:table-cell">
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-[#f5efe0] text-[#4a3728]">
+                        {supplier.category || '—'}
+                      </span>
+                    </TableCell>
+                    <TableCell className="hidden md:table-cell text-[#7a6a52] text-sm">{supplier.phone || '—'}</TableCell>
+                    <TableCell className="hidden md:table-cell text-[#7a6a52] text-sm">{supplier.location || '—'}</TableCell>
+                    <TableCell className="hidden lg:table-cell text-[#7a6a52] text-sm">{supplier.delivery_time || '—'}</TableCell>
+                    <TableCell className="hidden sm:table-cell"><StarDisplay value={supplier.quality_rating} /></TableCell>
+                    <TableCell className="hidden lg:table-cell"><StarDisplay value={supplier.reliability_rating} /></TableCell>
+                    <TableCell className="hidden lg:table-cell"><StarDisplay value={supplier.price_rating} /></TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-1">
+                        <Button variant="ghost" size="icon" onClick={() => { setEditing(supplier); setFormOpen(true) }} title="עריכה">
+                          <Pencil size={15} />
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={() => setDeleteTarget(supplier)} title="מחיקה" className="text-red-500 hover:text-red-700 hover:bg-red-50">
+                          <Trash2 size={15} />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
         </div>
 
-        <SupplierForm
-          open={formOpen}
-          onClose={() => { setFormOpen(false); setEditing(undefined) }}
-          supplier={editing}
-          onSave={handleSave}
+        <SupplierForm open={formOpen} onClose={() => { setFormOpen(false); setEditing(undefined) }} supplier={editing} onSave={handleSave} />
+        <ConfirmDialog
+          open={!!deleteTarget}
+          onClose={() => setDeleteTarget(undefined)}
+          onConfirm={handleDelete}
+          title="מחיקת ספק"
+          description={`האם אתה בטוח שברצונך למחוק את "${deleteTarget?.name}"?`}
+          confirmLabel="מחק"
         />
       </div>
     </Shell>
