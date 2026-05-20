@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useCallback } from 'react'
 import { Shell } from '@/components/layout/shell'
 import { PageHeader } from '@/components/layout/page-header'
 import { Button } from '@/components/ui/button'
@@ -123,7 +123,7 @@ export default function SuppliersPage() {
       .then(setSuppliers)
       .catch(() => toast({ type: 'error', title: 'שגיאה בטעינת ספקים' }))
       .finally(() => setLoading(false))
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase()
@@ -134,7 +134,7 @@ export default function SuppliersPage() {
     )
   }, [suppliers, search])
 
-  const handleSave = async (data: Partial<Supplier>) => {
+  const handleSave = useCallback(async (data: Partial<Supplier>) => {
     try {
       const saved = await upsertSupplier(editing ? { ...editing, ...data } : data)
       if (editing) {
@@ -148,9 +148,9 @@ export default function SuppliersPage() {
       toast({ type: 'error', title: 'שגיאה בשמירת הספק' })
     }
     setEditing(undefined)
-  }
+  }, [editing, toast])
 
-  const handleDelete = async () => {
+  const handleDelete = useCallback(async () => {
     if (!deleteTarget) return
     try {
       await deleteSupplier(deleteTarget.id)
@@ -160,7 +160,7 @@ export default function SuppliersPage() {
       toast({ type: 'error', title: 'שגיאה במחיקת הספק' })
     }
     setDeleteTarget(undefined)
-  }
+  }, [deleteTarget, toast])
 
   return (
     <Shell title="ספקים">

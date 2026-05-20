@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useCallback } from 'react'
 import { Shell } from '@/components/layout/shell'
 import { PageHeader } from '@/components/layout/page-header'
 import { Button } from '@/components/ui/button'
@@ -12,6 +12,7 @@ import { LeadForm } from '@/components/leads/lead-form'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { TableSkeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
+import { useDebounce } from '@/lib/hooks'
 import { formatCurrency, formatDate, isOverdue } from '@/lib/utils'
 import { getLeads, upsertLead, deleteLead, getCustomers } from '@/lib/data'
 import { LEAD_STATUSES } from '@/lib/constants'
@@ -34,17 +35,27 @@ export default function LeadsPage() {
       .then(([l, c]) => { setLeads(l); setCustomers(c) })
       .catch(() => toast({ type: 'error', title: 'שגיאה בטעינת הנתונים' }))
       .finally(() => setLoading(false))
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleSearch = useDebounce(
+    useCallback((q: string) => setSearch(q), []),
+    200
+  )
 
   const filtered = useMemo(() => {
+    const q = search.toLowerCase()
     return leads.filter(l => {
-      const q = search.toLowerCase()
-      const match = (l.full_name || '').toLowerCase().includes(q) || (l.phone || '').includes(q)
-      return match && (!statusFilter || l.lead_status === statusFilter)
+      const matchSearch = !q || (l.full_name || '').toLowerCase().includes(q) || (l.phone || '').includes(q)
+      return matchSearch && (!statusFilter || l.lead_status === statusFilter)
     })
   }, [leads, search, statusFilter])
 
-  const handleSave = async (data: Partial<Lead>) => {
+  const activeCount = useMemo(
+    () => leads.filter(l => !['הומר', 'נסגר'].includes(l.lead_status)).length,
+    [leads]
+  )
+
+  const handleSave = useCallback(async (data: Partial<Lead>) => {
     try {
       const saved = await upsertLead(editing ? { ...editing, ...data } : data)
       const withCustomer = { ...saved, customers: customers.find(c => c.id === saved.customer_id) }
@@ -59,9 +70,9 @@ export default function LeadsPage() {
       toast({ type: 'error', title: 'שגיאה בשמירת הליד' })
     }
     setEditing(undefined)
-  }
+  }, [editing, customers, toast])
 
-  const handleDelete = async () => {
+  const handleDelete = useCallback(async () => {
     if (!deleteTarget) return
     try {
       await deleteLead(deleteTarget.id)
@@ -71,36 +82,35 @@ export default function LeadsPage() {
       toast({ type: 'error', title: 'שגיאה במחיקת הליד' })
     }
     setDeleteTarget(undefined)
-  }
+  }, [deleteTarget, toast])
 
-  const convertToQuote = async (lead: Lead) => {
+  const convertToQuote = useCallback(async (lead: Lead) => {
     try {
       await upsertLead({ ...lead, lead_status: 'הומר' })
       setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, lead_status: 'הומר' } : l))
-      toast({ type: 'success', title: 'הליד הומר לטיפול', description: 'ניתן כעת ליצור הצעת מחיר בדף הצעות מחיר' })
+      toast({ type: 'success', title: 'הליד הומר לטיפול', description: 'ניתן כעת ליצור הצעת מחיר' })
     } catch {
       toast({ type: 'error', title: 'שגיאה בהמרת הליד' })
     }
-  }
+  }, [toast])
+
+  const openEdit = useCallback((l: Lead) => { setEditing(l); setFormOpen(true) }, [])
+  const openNew = useCallback(() => { setEditing(undefined); setFormOpen(true) }, [])
+  const closeForm = useCallback(() => { setFormOpen(false); setEditing(undefined) }, [])
 
   return (
     <Shell title="לידים">
       <div className="max-w-7xl mx-auto">
         <PageHeader
           title="לידים"
-          description={`${leads.length} לידים · ${leads.filter(l => !['הומר', 'נסגר'].includes(l.lead_status)).length} פעילים`}
-          action={
-            <Button onClick={() => { setEditing(undefined); setFormOpen(true) }}>
-              <Plus size={16} />
-              ליד חדש
-            </Button>
-          }
+          description={`${leads.length} לידים · ${activeCount} פעילים`}
+          action={<Button onClick={openNew}><Plus size={16} />ליד חדש</Button>}
         />
 
         <div className="flex gap-3 mb-4">
           <div className="relative flex-1">
             <Search size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#7a6a52]" />
-            <Input className="pr-9" placeholder="חיפוש לפי שם, טלפון..." value={search} onChange={e => setSearch(e.target.value)} />
+            <Input className="pr-9" placeholder="חיפוש לפי שם, טלפון..." onChange={e => handleSearch(e.target.value)} />
           </div>
           <Select className="w-40" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
             <option value="">כל הסטטוסים</option>
@@ -160,7 +170,7 @@ export default function LeadsPage() {
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1">
-                          <Button variant="ghost" size="icon" onClick={() => { setEditing(lead); setFormOpen(true) }} title="עריכה">
+                          <Button variant="ghost" size="icon" onClick={() => openEdit(lead)} title="עריכה">
                             <Pencil size={15} />
                           </Button>
                           {!['הומר', 'נסגר'].includes(lead.lead_status) && (
@@ -181,13 +191,7 @@ export default function LeadsPage() {
           )}
         </div>
 
-        <LeadForm
-          open={formOpen}
-          onClose={() => { setFormOpen(false); setEditing(undefined) }}
-          lead={editing}
-          customers={customers}
-          onSave={handleSave}
-        />
+        <LeadForm open={formOpen} onClose={closeForm} lead={editing} customers={customers} onSave={handleSave} />
         <ConfirmDialog
           open={!!deleteTarget}
           onClose={() => setDeleteTarget(undefined)}

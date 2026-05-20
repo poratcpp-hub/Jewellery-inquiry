@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useCallback } from 'react'
 import { Shell } from '@/components/layout/shell'
 import { PageHeader } from '@/components/layout/page-header'
 import { Button } from '@/components/ui/button'
@@ -12,6 +12,7 @@ import { QuoteForm } from '@/components/quotes/quote-form'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { TableSkeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
+import { useDebounce } from '@/lib/hooks'
 import { formatCurrency, formatDate, getProfitColor } from '@/lib/utils'
 import { getQuotes, upsertQuote, deleteQuote, getCustomers } from '@/lib/data'
 import { QUOTE_STATUSES } from '@/lib/constants'
@@ -33,26 +34,35 @@ export default function QuotesPage() {
   useEffect(() => {
     Promise.all([getQuotes(), getCustomers()])
       .then(([q, c]) => {
-        setQuotes(q.map(q => ({ ...q, customers: c.find(c => c.id === q.customer_id) || q.customers })))
+        const custMap = Object.fromEntries(c.map(x => [x.id, x]))
+        setQuotes(q.map(quote => ({ ...quote, customers: custMap[quote.customer_id || ''] || quote.customers })))
         setCustomers(c)
       })
       .catch(() => toast({ type: 'error', title: 'שגיאה בטעינת הנתונים' }))
       .finally(() => setLoading(false))
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleSearch = useDebounce(
+    useCallback((q: string) => setSearch(q), []),
+    200
+  )
 
   const filtered = useMemo(() => {
-    return quotes.filter(q => {
-      const customerName = q.customers?.full_name || ''
-      const match = q.quote_number.toLowerCase().includes(search.toLowerCase()) ||
-        customerName.toLowerCase().includes(search.toLowerCase())
-      return match && (!statusFilter || q.quote_status === statusFilter)
+    const q = search.toLowerCase()
+    return quotes.filter(quote => {
+      const matchSearch = !q || quote.quote_number.toLowerCase().includes(q) ||
+        (quote.customers?.full_name || '').toLowerCase().includes(q)
+      return matchSearch && (!statusFilter || quote.quote_status === statusFilter)
     })
   }, [quotes, search, statusFilter])
 
-  const handleSave = async (data: Partial<Quote>) => {
+  const totalValue = useMemo(() => filtered.reduce((s, q) => s + q.sale_price, 0), [filtered])
+
+  const handleSave = useCallback(async (data: Partial<Quote>) => {
     try {
       const saved = await upsertQuote(editing ? { ...editing, ...data } : data)
-      const enriched = { ...saved, customers: customers.find(c => c.id === saved.customer_id) || saved.customers }
+      const custMap = Object.fromEntries(customers.map(c => [c.id, c]))
+      const enriched = { ...saved, customers: custMap[saved.customer_id || ''] || saved.customers }
       if (editing) {
         setQuotes(prev => prev.map(q => q.id === editing.id ? enriched : q))
         toast({ type: 'success', title: 'הצעת המחיר עודכנה' })
@@ -64,9 +74,9 @@ export default function QuotesPage() {
       toast({ type: 'error', title: 'שגיאה בשמירת הצעת המחיר' })
     }
     setEditing(undefined)
-  }
+  }, [editing, customers, toast])
 
-  const handleDelete = async () => {
+  const handleDelete = useCallback(async () => {
     if (!deleteTarget) return
     try {
       await deleteQuote(deleteTarget.id)
@@ -76,19 +86,21 @@ export default function QuotesPage() {
       toast({ type: 'error', title: 'שגיאה במחיקה' })
     }
     setDeleteTarget(undefined)
-  }
+  }, [deleteTarget, toast])
 
-  const convertToOrder = async (quote: Quote) => {
+  const convertToOrder = useCallback(async (quote: Quote) => {
     try {
       await upsertQuote({ ...quote, quote_status: 'אושרה' })
       setQuotes(prev => prev.map(q => q.id === quote.id ? { ...q, quote_status: 'אושרה' } : q))
-      toast({ type: 'success', title: 'הצעה אושרה', description: 'כעת ניתן ליצור הזמנה מתוך דף ההזמנות' })
+      toast({ type: 'success', title: 'הצעה אושרה', description: 'כעת ניתן ליצור הזמנה' })
     } catch {
       toast({ type: 'error', title: 'שגיאה בהמרה' })
     }
-  }
+  }, [toast])
 
-  const totalValue = filtered.reduce((s, q) => s + q.sale_price, 0)
+  const openEdit = useCallback((q: Quote) => { setEditing(q); setFormOpen(true) }, [])
+  const openNew = useCallback(() => { setEditing(undefined); setFormOpen(true) }, [])
+  const closeForm = useCallback(() => { setFormOpen(false); setEditing(undefined) }, [])
 
   return (
     <Shell title="הצעות מחיר">
@@ -96,18 +108,13 @@ export default function QuotesPage() {
         <PageHeader
           title="הצעות מחיר"
           description={`${filtered.length} הצעות · שווי ${formatCurrency(totalValue)}`}
-          action={
-            <Button onClick={() => { setEditing(undefined); setFormOpen(true) }}>
-              <Plus size={16} />
-              הצעה חדשה
-            </Button>
-          }
+          action={<Button onClick={openNew}><Plus size={16} />הצעה חדשה</Button>}
         />
 
         <div className="flex gap-3 mb-4">
           <div className="relative flex-1">
             <Search size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#7a6a52]" />
-            <Input className="pr-9" placeholder="חיפוש לפי מספר הצעה, לקוח..." value={search} onChange={e => setSearch(e.target.value)} />
+            <Input className="pr-9" placeholder="חיפוש לפי מספר הצעה, לקוח..." onChange={e => handleSearch(e.target.value)} />
           </div>
           <Select className="w-40" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
             <option value="">כל הסטטוסים</option>
@@ -164,7 +171,7 @@ export default function QuotesPage() {
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1">
-                        <Button variant="ghost" size="icon" onClick={() => { setEditing(quote); setFormOpen(true) }} title="עריכה">
+                        <Button variant="ghost" size="icon" onClick={() => openEdit(quote)} title="עריכה">
                           <Pencil size={15} />
                         </Button>
                         {!['אושרה', 'נדחתה'].includes(quote.quote_status) && (
@@ -184,13 +191,7 @@ export default function QuotesPage() {
           )}
         </div>
 
-        <QuoteForm
-          open={formOpen}
-          onClose={() => { setFormOpen(false); setEditing(undefined) }}
-          quote={editing}
-          customers={customers}
-          onSave={handleSave}
-        />
+        <QuoteForm open={formOpen} onClose={closeForm} quote={editing} customers={customers} onSave={handleSave} />
         <ConfirmDialog
           open={!!deleteTarget}
           onClose={() => setDeleteTarget(undefined)}

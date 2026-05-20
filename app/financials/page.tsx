@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Shell } from '@/components/layout/shell'
 import { PageHeader } from '@/components/layout/page-header'
 import { Button } from '@/components/ui/button'
@@ -165,16 +165,19 @@ export default function FinancialsPage() {
       })
       .catch(() => toast({ type: 'error', title: 'שגיאה בטעינת הנתונים' }))
       .finally(() => setLoading(false))
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const now = new Date()
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
-  const monthlyRevenue = payments.filter(p => p.is_paid && new Date(p.payment_date) >= monthStart).reduce((s, p) => s + p.amount, 0)
-  const monthlyExpenses = expenses.filter(e => e.is_paid && new Date(e.expense_date) >= monthStart).reduce((s, e) => s + e.amount, 0)
-  const totalRevenue = payments.filter(p => p.is_paid).reduce((s, p) => s + p.amount, 0)
-  const unpaidExpenses = expenses.filter(e => !e.is_paid).reduce((s, e) => s + e.amount, 0)
+  const { monthlyRevenue, monthlyExpenses, unpaidExpenses } = useMemo(() => {
+    const monthStart = new Date()
+    monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0)
+    return {
+      monthlyRevenue: payments.filter(p => p.is_paid && new Date(p.payment_date) >= monthStart).reduce((s, p) => s + p.amount, 0),
+      monthlyExpenses: expenses.filter(e => e.is_paid && new Date(e.expense_date) >= monthStart).reduce((s, e) => s + e.amount, 0),
+      unpaidExpenses: expenses.filter(e => !e.is_paid).reduce((s, e) => s + e.amount, 0),
+    }
+  }, [payments, expenses])
 
-  const addPayment = async (data: Partial<Payment>) => {
+  const addPayment = useCallback(async (data: Partial<Payment>) => {
     try {
       const saved = await insertPayment(data)
       const enriched = {
@@ -187,9 +190,9 @@ export default function FinancialsPage() {
     } catch {
       toast({ type: 'error', title: 'שגיאה בהוספת התשלום' })
     }
-  }
+  }, [customers, orders, toast])
 
-  const addExpense = async (data: Partial<Expense>) => {
+  const addExpense = useCallback(async (data: Partial<Expense>) => {
     try {
       const saved = await insertExpense(data)
       const enriched = {
@@ -202,7 +205,7 @@ export default function FinancialsPage() {
     } catch {
       toast({ type: 'error', title: 'שגיאה בהוספת ההוצאה' })
     }
-  }
+  }, [suppliers, orders, toast])
 
   return (
     <Shell title="הכנסות והוצאות">

@@ -9,8 +9,9 @@ import { MetricsSkeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
 import { TrendingUp, TrendingDown, DollarSign, ShoppingBag, FileText, Target, AlertCircle, Calendar } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
-import { getDashboardMetrics, getOrders, getCustomers } from '@/lib/data'
+import { getPayments, getExpenses, getLeads, getQuotes, getOrders, getCustomers } from '@/lib/data'
 import type { DashboardMetrics, Order } from '@/lib/types'
+import { CLOSED_ORDER_STATUSES, CLOSED_QUOTE_STATUSES, CLOSED_LEAD_STATUSES } from '@/lib/constants'
 
 export default function DashboardPage() {
   const { toast } = useToast()
@@ -20,17 +21,44 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    Promise.all([getDashboardMetrics(), getOrders(), getCustomers()])
-      .then(([m, orders, customers]) => {
-        setMetrics(m)
-        const custMap = Object.fromEntries(customers.map(c => [c.id, c]))
-        const enriched = orders.map(o => ({ ...o, customers: custMap[o.customer_id || ''] || o.customers }))
+    // Single parallel fetch for everything the dashboard needs
+    Promise.all([getPayments(), getExpenses(), getLeads(), getQuotes(), getOrders(), getCustomers()])
+      .then(([payments, expenses, leads, quotes, orders, customers]) => {
         const now = new Date()
+        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
         const twoWeeks = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000)
-        setRecentOrders(enriched.slice(0, 5))
+
+        const custMap = Object.fromEntries(customers.map(c => [c.id, c]))
+        const enrichedOrders = orders.map(o => ({ ...o, customers: custMap[o.customer_id || ''] || o.customers }))
+
+        const monthlyRevenue = payments
+          .filter(p => p.is_paid && new Date(p.payment_date) >= monthStart)
+          .reduce((s, p) => s + p.amount, 0)
+        const monthlyExpenses = expenses
+          .filter(e => e.is_paid && new Date(e.expense_date) >= monthStart)
+          .reduce((s, e) => s + e.amount, 0)
+
+        setMetrics({
+          monthlyRevenue,
+          monthlyExpenses,
+          monthlyProfit: monthlyRevenue - monthlyExpenses,
+          openOrders: enrichedOrders.filter(o => !CLOSED_ORDER_STATUSES.has(o.order_status)).length,
+          openQuotes: quotes.filter(q => !CLOSED_QUOTE_STATUSES.has(q.quote_status)).length,
+          newLeads: leads.filter(l => !CLOSED_LEAD_STATUSES.has(l.lead_status)).length,
+          unpaidBalance: enrichedOrders
+            .filter(o => o.payment_status !== 'שולם במלואו')
+            .reduce((s, o) => s + o.balance_due, 0),
+          upcomingDeliveries: enrichedOrders.filter(o => {
+            if (!o.delivery_date || CLOSED_ORDER_STATUSES.has(o.order_status)) return false
+            const d = new Date(o.delivery_date)
+            return d >= now && d <= twoWeeks
+          }).length,
+        })
+
+        setRecentOrders(enrichedOrders.slice(0, 5))
         setUpcomingDeliveries(
-          enriched.filter(o => {
-            if (!o.delivery_date || ['נמסר', 'בוטל'].includes(o.order_status)) return false
+          enrichedOrders.filter(o => {
+            if (!o.delivery_date || CLOSED_ORDER_STATUSES.has(o.order_status)) return false
             const d = new Date(o.delivery_date)
             return d >= now && d <= twoWeeks
           })
@@ -38,7 +66,7 @@ export default function DashboardPage() {
       })
       .catch(() => toast({ type: 'error', title: 'שגיאה בטעינת הדשבורד' }))
       .finally(() => setLoading(false))
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <Shell title="דשבורד">

@@ -1,5 +1,6 @@
+import * as React from 'react'
 import { Badge, getStatusBadgeVariant } from '@/components/ui/badge'
-import { formatCurrency, formatDate, daysUntil } from '@/lib/utils'
+import { formatDate, daysUntil } from '@/lib/utils'
 import { AlertTriangle } from 'lucide-react'
 import type { Order } from '@/lib/types'
 import { cn } from '@/lib/utils'
@@ -8,7 +9,7 @@ interface UpcomingDeliveriesProps {
   orders: Order[]
 }
 
-export function UpcomingDeliveries({ orders }: UpcomingDeliveriesProps) {
+export const UpcomingDeliveries = React.memo(function UpcomingDeliveries({ orders }: UpcomingDeliveriesProps) {
   return (
     <div className="rounded-xl bg-white border border-[#e5ddd0] shadow-[0_1px_8px_rgba(26,18,9,0.06)]">
       <div className="p-5 border-b border-[#e5ddd0]">
@@ -18,15 +19,14 @@ export function UpcomingDeliveries({ orders }: UpcomingDeliveriesProps) {
         {orders.length === 0 && (
           <p className="text-center text-[#7a6a52] text-sm py-8">אין מסירות קרובות</p>
         )}
-        {orders.map((order) => {
+        {orders.map(order => {
           const days = daysUntil(order.delivery_date)
           const isUrgent = days !== null && days <= 3
+          const label = days === null ? '—' : days === 0 ? 'היום' : days === 1 ? 'מחר' : `${days} ימים`
           return (
             <div key={order.id} className="flex items-center justify-between p-4 hover:bg-[#faf8f5] transition-colors">
               <div className="flex items-center gap-3 flex-1 min-w-0">
-                {isUrgent && (
-                  <AlertTriangle size={14} className="text-amber-500 shrink-0" />
-                )}
+                {isUrgent && <AlertTriangle size={14} className="text-amber-500 shrink-0" />}
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-[#2c1810] truncate">
                     {order.customers?.full_name || '—'}
@@ -38,7 +38,7 @@ export function UpcomingDeliveries({ orders }: UpcomingDeliveriesProps) {
               </div>
               <div className="text-left mr-4 shrink-0">
                 <p className={cn('text-sm font-medium', isUrgent ? 'text-amber-600' : 'text-[#2c1810]')}>
-                  {days !== null ? (days === 0 ? 'היום' : days === 1 ? 'מחר' : `${days} ימים`) : '—'}
+                  {label}
                 </p>
                 <p className="text-xs text-[#7a6a52]">{formatDate(order.delivery_date)}</p>
               </div>
@@ -48,4 +48,4 @@ export function UpcomingDeliveries({ orders }: UpcomingDeliveriesProps) {
       </div>
     </div>
   )
-}
+})

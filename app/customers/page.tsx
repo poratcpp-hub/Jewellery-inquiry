@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useCallback } from 'react'
 import { Shell } from '@/components/layout/shell'
 import { PageHeader } from '@/components/layout/page-header'
 import { Button } from '@/components/ui/button'
@@ -11,6 +11,7 @@ import { CustomerForm } from '@/components/customers/customer-form'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { TableSkeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
+import { useDebounce } from '@/lib/hooks'
 import { formatDate } from '@/lib/utils'
 import { getCustomers, upsertCustomer, deleteCustomer } from '@/lib/data'
 import type { Customer } from '@/lib/types'
@@ -30,9 +31,15 @@ export default function CustomersPage() {
       .then(setCustomers)
       .catch(() => toast({ type: 'error', title: 'שגיאה בטעינת לקוחות' }))
       .finally(() => setLoading(false))
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleSearch = useDebounce(
+    useCallback((q: string) => setSearch(q), []),
+    200
+  )
 
   const filtered = useMemo(() => {
+    if (!search) return customers
     const q = search.toLowerCase()
     return customers.filter(c =>
       c.full_name.toLowerCase().includes(q) ||
@@ -42,7 +49,7 @@ export default function CustomersPage() {
     )
   }, [customers, search])
 
-  const handleSave = async (data: Partial<Customer>) => {
+  const handleSave = useCallback(async (data: Partial<Customer>) => {
     try {
       const saved = await upsertCustomer(editing ? { ...editing, ...data } : data)
       if (editing) {
@@ -56,9 +63,9 @@ export default function CustomersPage() {
       toast({ type: 'error', title: 'שגיאה בשמירת הלקוח' })
     }
     setEditing(undefined)
-  }
+  }, [editing, toast])
 
-  const handleDelete = async () => {
+  const handleDelete = useCallback(async () => {
     if (!deleteTarget) return
     try {
       await deleteCustomer(deleteTarget.id)
@@ -68,7 +75,11 @@ export default function CustomersPage() {
       toast({ type: 'error', title: 'שגיאה במחיקת הלקוח' })
     }
     setDeleteTarget(undefined)
-  }
+  }, [deleteTarget, toast])
+
+  const openEdit = useCallback((c: Customer) => { setEditing(c); setFormOpen(true) }, [])
+  const openNew = useCallback(() => { setEditing(undefined); setFormOpen(true) }, [])
+  const closeForm = useCallback(() => { setFormOpen(false); setEditing(undefined) }, [])
 
   return (
     <Shell title="לקוחות">
@@ -76,12 +87,7 @@ export default function CustomersPage() {
         <PageHeader
           title="לקוחות"
           description={`${customers.length} לקוחות במערכת`}
-          action={
-            <Button onClick={() => { setEditing(undefined); setFormOpen(true) }}>
-              <Plus size={16} />
-              לקוח חדש
-            </Button>
-          }
+          action={<Button onClick={openNew}><Plus size={16} />לקוח חדש</Button>}
         />
 
         <div className="mb-4 relative">
@@ -89,15 +95,12 @@ export default function CustomersPage() {
           <Input
             className="pr-9"
             placeholder="חיפוש לפי שם, טלפון, אינסטגרם, עיר..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
+            onChange={e => handleSearch(e.target.value)}
           />
         </div>
 
         <div className="bg-white rounded-xl border border-[#e5ddd0] shadow-[0_1px_8px_rgba(26,18,9,0.06)] overflow-hidden">
-          {loading ? (
-            <TableSkeleton rows={5} cols={6} />
-          ) : (
+          {loading ? <TableSkeleton rows={5} cols={6} /> : (
             <Table>
               <TableHeader>
                 <TableRow>
@@ -128,16 +131,14 @@ export default function CustomersPage() {
                     <TableCell>
                       {customer.phone ? (
                         <a href={`tel:${customer.phone}`} className="flex items-center gap-1 text-[#b8934a] hover:underline text-sm">
-                          <Phone size={12} />
-                          {customer.phone}
+                          <Phone size={12} />{customer.phone}
                         </a>
                       ) : '—'}
                     </TableCell>
                     <TableCell className="hidden sm:table-cell">
                       {customer.instagram ? (
                         <span className="flex items-center gap-1 text-[#7a6a52] text-sm">
-                          <AtSign size={12} />
-                          {customer.instagram}
+                          <AtSign size={12} />{customer.instagram}
                         </span>
                       ) : '—'}
                     </TableCell>
@@ -153,7 +154,7 @@ export default function CustomersPage() {
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1">
-                        <Button variant="ghost" size="icon" onClick={() => { setEditing(customer); setFormOpen(true) }} title="עריכה">
+                        <Button variant="ghost" size="icon" onClick={() => openEdit(customer)} title="עריכה">
                           <Pencil size={15} />
                         </Button>
                         <Button variant="ghost" size="icon" onClick={() => setDeleteTarget(customer)} title="מחיקה" className="text-red-500 hover:text-red-700 hover:bg-red-50">
@@ -168,12 +169,7 @@ export default function CustomersPage() {
           )}
         </div>
 
-        <CustomerForm
-          open={formOpen}
-          onClose={() => { setFormOpen(false); setEditing(undefined) }}
-          customer={editing}
-          onSave={handleSave}
-        />
+        <CustomerForm open={formOpen} onClose={closeForm} customer={editing} onSave={handleSave} />
         <ConfirmDialog
           open={!!deleteTarget}
           onClose={() => setDeleteTarget(undefined)}

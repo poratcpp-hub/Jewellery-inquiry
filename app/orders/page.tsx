@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useCallback } from 'react'
 import { Shell } from '@/components/layout/shell'
 import { PageHeader } from '@/components/layout/page-header'
 import { Button } from '@/components/ui/button'
@@ -12,6 +12,7 @@ import { OrderForm } from '@/components/orders/order-form'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { TableSkeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
+import { useDebounce } from '@/lib/hooks'
 import { formatCurrency, formatDate, daysUntil } from '@/lib/utils'
 import { getOrders, upsertOrder, deleteOrder, getCustomers, getSuppliers } from '@/lib/data'
 import { ORDER_STATUSES } from '@/lib/constants'
@@ -34,49 +35,63 @@ export default function OrdersPage() {
   useEffect(() => {
     Promise.all([getOrders(), getCustomers(), getSuppliers()])
       .then(([o, c, s]) => {
+        const custMap = Object.fromEntries(c.map(x => [x.id, x]))
+        const suppMap = Object.fromEntries(s.map(x => [x.id, x]))
         setOrders(o.map(order => ({
           ...order,
-          customers: c.find(c => c.id === order.customer_id) || order.customers,
-          suppliers: s.find(s => s.id === order.supplier_id) || order.suppliers,
+          customers: custMap[order.customer_id || ''] || order.customers,
+          suppliers: suppMap[order.supplier_id || ''] || order.suppliers,
         })))
         setCustomers(c)
         setSuppliers(s)
       })
       .catch(() => toast({ type: 'error', title: 'שגיאה בטעינת הנתונים' }))
       .finally(() => setLoading(false))
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleSearch = useDebounce(
+    useCallback((q: string) => setSearch(q), []),
+    200
+  )
 
   const filtered = useMemo(() => {
+    const q = search.toLowerCase()
     return orders.filter(o => {
-      const q = search.toLowerCase()
-      const match = o.order_number.toLowerCase().includes(q) ||
+      const match = !q || o.order_number.toLowerCase().includes(q) ||
         (o.customers?.full_name || '').toLowerCase().includes(q)
       return match && (!statusFilter || o.order_status === statusFilter)
     })
   }, [orders, search, statusFilter])
 
-  const handleSave = async (data: Partial<Order>) => {
+  const { totalRevenue, totalBalance } = useMemo(() => ({
+    totalRevenue: filtered.reduce((s, o) => s + o.sale_price, 0),
+    totalBalance: filtered.filter(o => o.payment_status !== 'שולם במלואו').reduce((s, o) => s + o.balance_due, 0),
+  }), [filtered])
+
+  const enrich = useCallback((order: Partial<Order>) => ({
+    ...order,
+    customers: customers.find(c => c.id === order.customer_id) || (order as Order).customers,
+    suppliers: suppliers.find(s => s.id === order.supplier_id) || (order as Order).suppliers,
+  }), [customers, suppliers])
+
+  const handleSave = useCallback(async (data: Partial<Order>) => {
     try {
       const saved = await upsertOrder(editing ? { ...editing, ...data } : data)
-      const enriched = {
-        ...saved,
-        customers: customers.find(c => c.id === saved.customer_id) || saved.customers,
-        suppliers: suppliers.find(s => s.id === saved.supplier_id) || saved.suppliers,
-      }
+      const enriched = enrich(saved)
       if (editing) {
-        setOrders(prev => prev.map(o => o.id === editing.id ? enriched : o))
+        setOrders(prev => prev.map(o => o.id === editing.id ? enriched as Order : o))
         toast({ type: 'success', title: 'ההזמנה עודכנה' })
       } else {
-        setOrders(prev => [{ ...enriched, id: enriched.id || Math.random().toString(36).slice(2) }, ...prev])
+        setOrders(prev => [{ ...enriched, id: enriched.id || Math.random().toString(36).slice(2) } as Order, ...prev])
         toast({ type: 'success', title: 'הזמנה חדשה נוצרה' })
       }
     } catch {
       toast({ type: 'error', title: 'שגיאה בשמירת ההזמנה' })
     }
     setEditing(undefined)
-  }
+  }, [editing, enrich, toast])
 
-  const handleDelete = async () => {
+  const handleDelete = useCallback(async () => {
     if (!deleteTarget) return
     try {
       await deleteOrder(deleteTarget.id)
@@ -86,12 +101,11 @@ export default function OrdersPage() {
       toast({ type: 'error', title: 'שגיאה במחיקת ההזמנה' })
     }
     setDeleteTarget(undefined)
-  }
+  }, [deleteTarget, toast])
 
-  const totalRevenue = filtered.reduce((s, o) => s + o.sale_price, 0)
-  const totalBalance = filtered
-    .filter(o => o.payment_status !== 'שולם במלואו')
-    .reduce((s, o) => s + o.balance_due, 0)
+  const openEdit = useCallback((o: Order) => { setEditing(o); setFormOpen(true) }, [])
+  const openNew = useCallback(() => { setEditing(undefined); setFormOpen(true) }, [])
+  const closeForm = useCallback(() => { setFormOpen(false); setEditing(undefined) }, [])
 
   return (
     <Shell title="הזמנות">
@@ -99,18 +113,13 @@ export default function OrdersPage() {
         <PageHeader
           title="הזמנות"
           description={`${filtered.length} הזמנות · שווי ${formatCurrency(totalRevenue)} · יתרה ${formatCurrency(totalBalance)}`}
-          action={
-            <Button onClick={() => { setEditing(undefined); setFormOpen(true) }}>
-              <Plus size={16} />
-              הזמנה חדשה
-            </Button>
-          }
+          action={<Button onClick={openNew}><Plus size={16} />הזמנה חדשה</Button>}
         />
 
         <div className="flex gap-3 mb-4">
           <div className="relative flex-1">
             <Search size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#7a6a52]" />
-            <Input className="pr-9" placeholder="חיפוש לפי מספר הזמנה, לקוח..." value={search} onChange={e => setSearch(e.target.value)} />
+            <Input className="pr-9" placeholder="חיפוש לפי מספר הזמנה, לקוח..." onChange={e => handleSearch(e.target.value)} />
           </div>
           <Select className="w-44" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
             <option value="">כל הסטטוסים</option>
@@ -168,11 +177,9 @@ export default function OrdersPage() {
                       </TableCell>
                       <TableCell className="font-semibold text-[#2c1810]">{formatCurrency(order.sale_price)}</TableCell>
                       <TableCell className="hidden lg:table-cell">
-                        {order.balance_due > 0 ? (
-                          <span className="text-red-600 font-medium text-sm">{formatCurrency(order.balance_due)}</span>
-                        ) : (
-                          <span className="text-emerald-600 text-sm">שולם</span>
-                        )}
+                        {order.balance_due > 0
+                          ? <span className="text-red-600 font-medium text-sm">{formatCurrency(order.balance_due)}</span>
+                          : <span className="text-emerald-600 text-sm">שולם</span>}
                       </TableCell>
                       <TableCell className="hidden md:table-cell">
                         {order.delivery_date ? (
@@ -184,7 +191,7 @@ export default function OrdersPage() {
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1">
-                          <Button variant="ghost" size="icon" onClick={() => { setEditing(order); setFormOpen(true) }} title="עריכה">
+                          <Button variant="ghost" size="icon" onClick={() => openEdit(order)} title="עריכה">
                             <Pencil size={15} />
                           </Button>
                           <Button variant="ghost" size="icon" onClick={() => setDeleteTarget(order)} title="מחיקה" className="text-red-500 hover:text-red-700 hover:bg-red-50">
@@ -200,14 +207,7 @@ export default function OrdersPage() {
           )}
         </div>
 
-        <OrderForm
-          open={formOpen}
-          onClose={() => { setFormOpen(false); setEditing(undefined) }}
-          order={editing}
-          customers={customers}
-          suppliers={suppliers}
-          onSave={handleSave}
-        />
+        <OrderForm open={formOpen} onClose={closeForm} order={editing} customers={customers} suppliers={suppliers} onSave={handleSave} />
         <ConfirmDialog
           open={!!deleteTarget}
           onClose={() => setDeleteTarget(undefined)}
