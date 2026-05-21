@@ -54,13 +54,14 @@ export interface Quote {
   jewelry_type?: string
   description?: string
   diamond_type?: string
+  diamond_origin?: string
+  diamond_certificate?: string
   gold_type?: string
   gold_color?: string
   carat?: number
   diamond_color?: string
   diamond_clarity?: string
   diamond_cut?: string
-  has_certificate: boolean
   diamond_cost: number
   gold_cost: number
   labor_cost: number
@@ -89,6 +90,8 @@ export interface Order {
   jewelry_type?: string
   description?: string
   diamond_type?: string
+  diamond_origin?: string
+  diamond_certificate?: string
   gold_type?: string
   gold_color?: string
   size?: string

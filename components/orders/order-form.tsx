@@ -23,7 +23,9 @@ interface OrderFormProps {
 const JEWELRY_OPTIONS = ['טבעת אירוסין', 'טבעת נישואין', 'עגילים', 'שרשרת', 'צמיד', 'תליון', 'אחר']
 const GOLD_OPTIONS = ['14K', '18K', '9K']
 const GOLD_COLOR_OPTIONS = ['צהוב', 'לבן', 'ורוד']
-const DIAMOND_OPTIONS = ['עגול', 'מרקיז', 'אובל', 'כרית', 'נסיכה', 'אמרלד', 'לב', 'ללא', 'אחר']
+const DIAMOND_OPTIONS = ['Round', 'Princess', 'Oval', 'Cushion', 'Marquise', 'Emerald', 'Pear', 'Radiant', 'Asscher', 'Heart', 'ללא', 'אחר']
+const DIAMOND_ORIGIN_OPTIONS = ['טבעי', 'מעבדה']
+const CERTIFICATE_OPTIONS = ['GIA', 'IGI', 'SGL', 'GGL', 'ללא תעודה']
 const ORDER_STATUS_OPTIONS = ['הזמנה חדשה', 'בייצור', 'מוכן', 'נמסר', 'בוטל']
 const PRODUCTION_STATUS_OPTIONS = ['הזמנת חומרים', 'הזמנת יהלום', 'בייצור', 'שיבוץ', 'ליטוש', 'הושלם']
 const PAYMENT_STATUS_OPTIONS = ['לא שולם', 'שולם חלקית', 'שולם במלואו']
@@ -99,10 +101,22 @@ export function OrderForm({ open, onClose, order, customers, suppliers, onSave }
                 {GOLD_COLOR_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
               </Select>
             </FormField>
-            <FormField label="סוג יהלום" htmlFor="diamond_type">
+            <FormField label="חיתוך (Cut)" htmlFor="diamond_type">
               <Select id="diamond_type" value={form.diamond_type || ''} onChange={e => set('diamond_type', e.target.value)}>
                 <option value="">בחר</option>
                 {DIAMOND_OPTIONS.map(d => <option key={d} value={d}>{d}</option>)}
+              </Select>
+            </FormField>
+            <FormField label="מקור יהלום" htmlFor="diamond_origin">
+              <Select id="diamond_origin" value={form.diamond_origin || ''} onChange={e => set('diamond_origin', e.target.value)}>
+                <option value="">בחר</option>
+                {DIAMOND_ORIGIN_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+              </Select>
+            </FormField>
+            <FormField label="תעודה" htmlFor="diamond_certificate">
+              <Select id="diamond_certificate" value={form.diamond_certificate || ''} onChange={e => set('diamond_certificate', e.target.value)}>
+                <option value="">בחר</option>
+                {CERTIFICATE_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
               </Select>
             </FormField>
             <FormField label="מידה" htmlFor="size">

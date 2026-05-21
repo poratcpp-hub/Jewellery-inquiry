@@ -9,12 +9,14 @@ export const PAYMENT_STATUSES = ['לא שולם', 'שולם חלקית', 'שול
 export const TASK_STATUSES = ['פתוח', 'בביצוע', 'הושלם'] as const
 
 export const JEWELRY_TYPES = ['טבעת אירוסין', 'טבעת נישואין', 'עגילים', 'שרשרת', 'צמיד', 'תליון', 'אחר'] as const
-export const DIAMOND_TYPES = ['עגול', 'מרקיז', 'אובל', 'כרית', 'נסיכה', 'אמרלד', 'לב', 'ללא', 'אחר'] as const
+export const DIAMOND_TYPES = ['Round', 'Princess', 'Oval', 'Cushion', 'Marquise', 'Emerald', 'Pear', 'Radiant', 'Asscher', 'Heart', 'ללא', 'אחר'] as const
+export const DIAMOND_ORIGINS = ['טבעי', 'מעבדה'] as const
+export const DIAMOND_CERTIFICATES = ['GIA', 'IGI', 'SGL', 'GGL', 'ללא תעודה'] as const
 export const GOLD_TYPES = ['14K', '18K', '9K'] as const
 export const GOLD_COLORS = ['צהוב', 'לבן', 'ורוד'] as const
 export const DIAMOND_COLORS = ['D', 'E', 'F', 'G', 'H', 'I', 'J', 'K'] as const
 export const DIAMOND_CLARITIES = ['FL', 'IF', 'VVS1', 'VVS2', 'VS1', 'VS2', 'SI1', 'SI2', 'I1'] as const
-export const DIAMOND_CUTS = ['מצוין', 'טוב מאוד', 'טוב'] as const
+export const DIAMOND_CUTS = ['Excellent', 'Very Good', 'Good', 'Fair'] as const
 
 export const SOURCES = ['אינסטגרם', 'פייסבוק', 'המלצה', 'אתר', 'גוגל', 'TikTok', 'אחר'] as const
 export const PAYMENT_TYPES = ['מקדמה', 'יתרה', 'תשלום מלא', 'החזר'] as const

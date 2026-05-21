@@ -20,12 +20,14 @@ interface QuoteFormProps {
 }
 
 const JEWELRY_OPTIONS = ['טבעת אירוסין', 'טבעת נישואין', 'עגילים', 'שרשרת', 'צמיד', 'תליון', 'אחר']
-const DIAMOND_OPTIONS = ['עגול', 'מרקיז', 'אובל', 'כרית', 'נסיכה', 'אמרלד', 'לב', 'אחר']
+const DIAMOND_OPTIONS = ['Round', 'Princess', 'Oval', 'Cushion', 'Marquise', 'Emerald', 'Pear', 'Radiant', 'Asscher', 'Heart', 'ללא', 'אחר']
+const DIAMOND_ORIGIN_OPTIONS = ['טבעי', 'מעבדה']
+const CERTIFICATE_OPTIONS = ['GIA', 'IGI', 'SGL', 'GGL', 'ללא תעודה']
 const GOLD_OPTIONS = ['14K', '18K', '9K']
 const GOLD_COLOR_OPTIONS = ['צהוב', 'לבן', 'ורוד']
 const COLOR_OPTIONS = ['D', 'E', 'F', 'G', 'H', 'I', 'J', 'K']
 const CLARITY_OPTIONS = ['FL', 'IF', 'VVS1', 'VVS2', 'VS1', 'VS2', 'SI1', 'SI2', 'I1']
-const CUT_OPTIONS = ['מצוין', 'טוב מאוד', 'טוב']
+const CUT_OPTIONS = ['Excellent', 'Very Good', 'Good', 'Fair']
 const STATUS_OPTIONS = ['טיוטה', 'נשלחה', 'אושרה', 'נדחתה', 'פג תוקף']
 
 const COST_FIELDS = [
@@ -43,7 +45,6 @@ export function QuoteForm({ open, onClose, quote, customers, onSave }: QuoteForm
     quote || {
       quote_number: generateQuoteNumber(),
       quote_status: 'טיוטה',
-      has_certificate: false,
       diamond_cost: 0, gold_cost: 0, labor_cost: 0,
       setting_cost: 0, packaging_cost: 0, shipping_cost: 0, other_cost: 0,
       sale_price: 0,
@@ -113,10 +114,16 @@ export function QuoteForm({ open, onClose, quote, customers, onSave }: QuoteForm
 
         <FormSection title="פרטי יהלום">
           <FormGrid cols={3}>
-            <FormField label="סוג יהלום" htmlFor="diamond_type">
+            <FormField label="חיתוך (Cut)" htmlFor="diamond_type">
               <Select id="diamond_type" value={form.diamond_type || ''} onChange={e => set('diamond_type', e.target.value)}>
                 <option value="">בחר</option>
                 {DIAMOND_OPTIONS.map(d => <option key={d} value={d}>{d}</option>)}
+              </Select>
+            </FormField>
+            <FormField label="מקור יהלום" htmlFor="diamond_origin">
+              <Select id="diamond_origin" value={form.diamond_origin || ''} onChange={e => set('diamond_origin', e.target.value)}>
+                <option value="">בחר</option>
+                {DIAMOND_ORIGIN_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
               </Select>
             </FormField>
             <FormField label="קראט" htmlFor="carat">
@@ -128,26 +135,22 @@ export function QuoteForm({ open, onClose, quote, customers, onSave }: QuoteForm
                 {COLOR_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
               </Select>
             </FormField>
-            <FormField label="ניקיון" htmlFor="diamond_clarity">
+            <FormField label="ניקיון (Clarity)" htmlFor="diamond_clarity">
               <Select id="diamond_clarity" value={form.diamond_clarity || ''} onChange={e => set('diamond_clarity', e.target.value)}>
                 <option value="">בחר</option>
                 {CLARITY_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
               </Select>
             </FormField>
-            <FormField label="ליטוש" htmlFor="diamond_cut">
+            <FormField label="ליטוש (Polish)" htmlFor="diamond_cut">
               <Select id="diamond_cut" value={form.diamond_cut || ''} onChange={e => set('diamond_cut', e.target.value)}>
                 <option value="">בחר</option>
                 {CUT_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
               </Select>
             </FormField>
-            <FormField label="תעודה GIA" htmlFor="has_certificate">
-              <Select
-                id="has_certificate"
-                value={form.has_certificate ? 'yes' : 'no'}
-                onChange={e => set('has_certificate', e.target.value === 'yes')}
-              >
-                <option value="no">ללא תעודה</option>
-                <option value="yes">עם תעודה GIA</option>
+            <FormField label="תעודה" htmlFor="diamond_certificate">
+              <Select id="diamond_certificate" value={form.diamond_certificate || ''} onChange={e => set('diamond_certificate', e.target.value)}>
+                <option value="">בחר</option>
+                {CERTIFICATE_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
               </Select>
             </FormField>
           </FormGrid>
