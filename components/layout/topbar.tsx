@@ -1,5 +1,6 @@
 'use client'
 
+import Image from 'next/image'
 import { Menu, Bell, Gem } from 'lucide-react'
 import { formatDate } from '@/lib/utils'
 
@@ -20,8 +21,18 @@ export function Topbar({ onMenuClick, title }: TopbarProps) {
         >
           <Menu size={20} />
         </button>
+        {/* Logo in topbar — visible on mobile where sidebar is hidden */}
+        <div className="lg:hidden">
+          <Image
+            src="/porat-logo.svg"
+            alt="PORAT Private Jeweler"
+            width={110}
+            height={44}
+            priority
+          />
+        </div>
         {title && (
-          <h1 className="text-base font-semibold text-[#2c1810] hidden sm:block">{title}</h1>
+          <h1 className="text-base font-semibold text-[#2c1810] hidden lg:block">{title}</h1>
         )}
       </div>
 
@@ -31,10 +42,8 @@ export function Topbar({ onMenuClick, title }: TopbarProps) {
           <Bell size={18} />
           <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-[#b8934a] rounded-full" />
         </button>
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-full bg-[#b8934a] flex items-center justify-center">
-            <Gem size={14} className="text-white" />
-          </div>
+        <div className="w-8 h-8 rounded-full bg-[#b8934a] flex items-center justify-center">
+          <Gem size={14} className="text-white" />
         </div>
       </div>
     </header>

@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard,
@@ -11,7 +12,6 @@ import {
   TrendingUp,
   Truck,
   Settings,
-  Gem,
   X,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -53,19 +53,20 @@ export function Sidebar({ open, onClose }: SidebarProps) {
         )}
       >
         {/* Logo */}
-        <div className="flex items-center justify-between px-6 py-5 border-b border-white/10">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 bg-[#b8934a] rounded-lg flex items-center justify-center">
-              <Gem size={16} className="text-white" />
-            </div>
-            <div>
-              <div className="text-white font-bold text-sm leading-tight">יהלומי פרמיום</div>
-              <div className="text-[#b8934a] text-xs">ניהול עסקי</div>
-            </div>
+        <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
+          <div className="flex-1 flex justify-center">
+            <Image
+              src="/porat-logo.svg"
+              alt="PORAT Private Jeweler"
+              width={160}
+              height={64}
+              className="brightness-0 invert"
+              priority
+            />
           </div>
           <button
             onClick={onClose}
-            className="lg:hidden text-white/60 hover:text-white p-1"
+            className="lg:hidden text-white/60 hover:text-white p-1 shrink-0"
           >
             <X size={18} />
           </button>
@@ -104,7 +105,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
         {/* Footer */}
         <div className="px-4 py-4 border-t border-white/10">
           <div className="text-xs text-white/40 text-center">
-            © 2025 מערכת ניהול תכשיטים
+            © 2025 PORAT Private Jeweler
           </div>
         </div>
       </aside>

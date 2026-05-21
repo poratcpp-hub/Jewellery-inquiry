@@ -73,7 +73,7 @@ export default function DashboardPage() {
       <div className="max-w-7xl mx-auto space-y-6">
         <div>
           <h1 className="text-2xl font-bold text-[#2c1810]">שלום, ברוכים הבאים 👋</h1>
-          <p className="text-[#7a6a52] text-sm mt-0.5">סקירה כללית של העסק לחודש הנוכחי</p>
+          <p className="text-[#7a6a52] text-sm mt-0.5">PORAT Private Jeweler · סקירה כללית לחודש הנוכחי</p>
         </div>
 
         {loading || !metrics ? <MetricsSkeleton /> : (
