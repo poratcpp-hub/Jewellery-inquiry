@@ -7,17 +7,17 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { Badge, getStatusBadgeVariant } from '@/components/ui/badge'
-import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
+import { Table, TableHeader, TableBody, TableRow, SortableHead, TableCell } from '@/components/ui/table'
 import { OrderForm } from '@/components/orders/order-form'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { TableSkeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
-import { useDebounce } from '@/lib/hooks'
-import { formatCurrency, formatDate, daysUntil } from '@/lib/utils'
+import { useDebounce, useTableSort } from '@/lib/hooks'
+import { formatCurrency, formatDate, daysUntil, exportCsv } from '@/lib/utils'
 import { getOrders, upsertOrder, deleteOrder, getCustomers, getSuppliers } from '@/lib/data'
 import { ORDER_STATUSES } from '@/lib/constants'
 import type { Order, Customer, Supplier } from '@/lib/types'
-import { Plus, Search, Pencil, Trash2, AlertTriangle } from 'lucide-react'
+import { Plus, Search, Pencil, Trash2, AlertTriangle, Download } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export default function OrdersPage() {
@@ -49,10 +49,7 @@ export default function OrdersPage() {
       .finally(() => setLoading(false))
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleSearch = useDebounce(
-    useCallback((q: string) => setSearch(q), []),
-    200
-  )
+  const handleSearch = useDebounce(useCallback((q: string) => setSearch(q), []), 200)
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase()
@@ -62,6 +59,8 @@ export default function OrdersPage() {
       return match && (!statusFilter || o.order_status === statusFilter)
     })
   }, [orders, search, statusFilter])
+
+  const { sorted, sortKey, sortDir, toggleSort } = useTableSort<Order>(filtered, 'created_at', 'desc')
 
   const { totalRevenue, totalBalance } = useMemo(() => ({
     totalRevenue: filtered.reduce((s, o) => s + o.sale_price, 0),
@@ -103,6 +102,20 @@ export default function OrdersPage() {
     setDeleteTarget(undefined)
   }, [deleteTarget, toast])
 
+  const handleExport = useCallback(() => {
+    exportCsv('orders', sorted.map(o => ({
+      'מספר הזמנה': o.order_number,
+      לקוח: o.customers?.full_name || '',
+      תכשיט: o.jewelry_type || '',
+      'סוג יהלום': o.diamond_type || '',
+      'סטטוס הזמנה': o.order_status,
+      'סטטוס תשלום': o.payment_status,
+      'מחיר מכירה': o.sale_price,
+      'יתרה לגביה': o.balance_due,
+      'תאריך מסירה': o.delivery_date || '',
+    })))
+  }, [sorted])
+
   const openEdit = useCallback((o: Order) => { setEditing(o); setFormOpen(true) }, [])
   const openNew = useCallback(() => { setEditing(undefined); setFormOpen(true) }, [])
   const closeForm = useCallback(() => { setFormOpen(false); setEditing(undefined) }, [])
@@ -113,7 +126,14 @@ export default function OrdersPage() {
         <PageHeader
           title="הזמנות"
           description={`${filtered.length} הזמנות · שווי ${formatCurrency(totalRevenue)} · יתרה ${formatCurrency(totalBalance)}`}
-          action={<Button onClick={openNew}><Plus size={16} />הזמנה חדשה</Button>}
+          action={
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={handleExport} title="ייצוא CSV">
+                <Download size={15} /><span className="hidden sm:inline">ייצוא</span>
+              </Button>
+              <Button onClick={openNew}><Plus size={16} />הזמנה חדשה</Button>
+            </div>
+          }
         />
 
         <div className="flex gap-3 mb-4">
@@ -132,49 +152,38 @@ export default function OrdersPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>מספר הזמנה</TableHead>
-                  <TableHead>לקוח</TableHead>
-                  <TableHead className="hidden md:table-cell">תכשיט</TableHead>
-                  <TableHead>סטטוס</TableHead>
-                  <TableHead className="hidden sm:table-cell">תשלום</TableHead>
-                  <TableHead>מחיר</TableHead>
-                  <TableHead className="hidden lg:table-cell">יתרה</TableHead>
-                  <TableHead className="hidden md:table-cell">מסירה</TableHead>
-                  <TableHead>פעולות</TableHead>
+                  <SortableHead sortKey="order_number" activeSortKey={sortKey as string} sortDir={sortDir} onSort={k => toggleSort(k as keyof Order)}>מספר הזמנה</SortableHead>
+                  <SortableHead>לקוח</SortableHead>
+                  <SortableHead className="hidden md:table-cell">תכשיט</SortableHead>
+                  <SortableHead sortKey="order_status" activeSortKey={sortKey as string} sortDir={sortDir} onSort={k => toggleSort(k as keyof Order)}>סטטוס</SortableHead>
+                  <SortableHead className="hidden sm:table-cell">תשלום</SortableHead>
+                  <SortableHead sortKey="sale_price" activeSortKey={sortKey as string} sortDir={sortDir} onSort={k => toggleSort(k as keyof Order)}>מחיר</SortableHead>
+                  <SortableHead sortKey="balance_due" activeSortKey={sortKey as string} sortDir={sortDir} onSort={k => toggleSort(k as keyof Order)} className="hidden lg:table-cell">יתרה</SortableHead>
+                  <SortableHead sortKey="delivery_date" activeSortKey={sortKey as string} sortDir={sortDir} onSort={k => toggleSort(k as keyof Order)} className="hidden md:table-cell">מסירה</SortableHead>
+                  <SortableHead>פעולות</SortableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filtered.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={9} className="text-center text-[#7a6a52] py-12">
-                      {search || statusFilter ? 'לא נמצאו הזמנות התואמות לחיפוש' : 'אין הזמנות עדיין'}
-                    </TableCell>
-                  </TableRow>
+                  <tr><td colSpan={9} className="text-center text-[#7a6a52] py-12 text-sm">
+                    {search || statusFilter ? 'לא נמצאו הזמנות התואמות לחיפוש' : 'אין הזמנות עדיין'}
+                  </td></tr>
                 )}
-                {filtered.map(order => {
+                {sorted.map(order => {
                   const days = daysUntil(order.delivery_date)
                   const isUrgent = days !== null && days <= 3 && !['נמסר', 'בוטל'].includes(order.order_status)
                   return (
                     <TableRow key={order.id}>
-                      <TableCell>
-                        <span className="font-mono text-sm font-medium text-[#b8934a]">{order.order_number}</span>
-                      </TableCell>
+                      <TableCell><span className="font-mono text-sm font-medium text-[#b8934a]">{order.order_number}</span></TableCell>
                       <TableCell>
                         <div className="font-medium text-[#2c1810]">{order.customers?.full_name || '—'}</div>
-                        {order.production_status && (
-                          <div className="text-xs text-[#7a6a52]">{order.production_status}</div>
-                        )}
+                        {order.production_status && <div className="text-xs text-[#7a6a52]">{order.production_status}</div>}
                       </TableCell>
                       <TableCell className="hidden md:table-cell text-[#7a6a52] text-sm">
-                        {order.jewelry_type || '—'}
-                        {order.gold_type && <span className="text-xs"> · {order.gold_type}</span>}
+                        {order.jewelry_type || '—'}{order.gold_type && <span className="text-xs"> · {order.gold_type}</span>}
                       </TableCell>
-                      <TableCell>
-                        <Badge variant={getStatusBadgeVariant(order.order_status)}>{order.order_status}</Badge>
-                      </TableCell>
-                      <TableCell className="hidden sm:table-cell">
-                        <Badge variant={getStatusBadgeVariant(order.payment_status)}>{order.payment_status}</Badge>
-                      </TableCell>
+                      <TableCell><Badge variant={getStatusBadgeVariant(order.order_status)}>{order.order_status}</Badge></TableCell>
+                      <TableCell className="hidden sm:table-cell"><Badge variant={getStatusBadgeVariant(order.payment_status)}>{order.payment_status}</Badge></TableCell>
                       <TableCell className="font-semibold text-[#2c1810]">{formatCurrency(order.sale_price)}</TableCell>
                       <TableCell className="hidden lg:table-cell">
                         {order.balance_due > 0
@@ -191,12 +200,8 @@ export default function OrdersPage() {
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1">
-                          <Button variant="ghost" size="icon" onClick={() => openEdit(order)} title="עריכה">
-                            <Pencil size={15} />
-                          </Button>
-                          <Button variant="ghost" size="icon" onClick={() => setDeleteTarget(order)} title="מחיקה" className="text-red-500 hover:text-red-700 hover:bg-red-50">
-                            <Trash2 size={15} />
-                          </Button>
+                          <Button variant="ghost" size="icon" onClick={() => openEdit(order)} title="עריכה"><Pencil size={15} /></Button>
+                          <Button variant="ghost" size="icon" onClick={() => setDeleteTarget(order)} title="מחיקה" className="text-red-500 hover:text-red-700 hover:bg-red-50"><Trash2 size={15} /></Button>
                         </div>
                       </TableCell>
                     </TableRow>

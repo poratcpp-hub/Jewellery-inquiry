@@ -116,3 +116,20 @@ export function getProfitColor(margin: number): string {
   if (margin >= 25) return 'text-amber-600'
   return 'text-red-600'
 }
+
+export function exportCsv(filename: string, rows: Record<string, unknown>[]) {
+  if (!rows.length) return
+  const keys = Object.keys(rows[0])
+  const escape = (v: unknown) => {
+    const s = v == null ? '' : String(v)
+    return s.includes(',') || s.includes('"') || s.includes('\n')
+      ? `"${s.replace(/"/g, '""')}"` : s
+  }
+  const csv = [keys.join(','), ...rows.map(r => keys.map(k => escape(r[k])).join(','))].join('\n')
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' })
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(blob)
+  a.download = `${filename}.csv`
+  a.click()
+  URL.revokeObjectURL(a.href)
+}
