@@ -13,14 +13,16 @@ if (typeof window !== 'undefined') {
   } else if (key.startsWith('sb_publishable_')) {
     console.warn(
       '[Supabase] ⚠️  Key type: PUBLISHABLE — this key requires a host allowlist.\n' +
-      '  If you see "Host not in allowlist" errors, go to:\n' +
-      '  Supabase Dashboard → Project Settings → API → API Keys\n' +
-      '  Add your domain to the publishable key allowlist,\n' +
-      '  OR copy the "anon public" JWT key (starts with eyJ...) into .env.local'
+      '  Fix: copy the "anon public" JWT key (starts with eyJ...) from\n' +
+      '  Supabase → Project Settings → API → API Keys\n' +
+      '  and set it as NEXT_PUBLIC_SUPABASE_ANON_KEY in your .env.local\n' +
+      '  (or Vercel environment variables for deployed instances)'
     )
   } else if (key.startsWith('eyJ')) {
-    console.log('[Supabase] Key type: JWT anon (no host restrictions) ✅')
+    console.log('[Supabase] Key type: JWT anon — no host restrictions ✅')
   }
+  // Version marker — if you see this line, the cache-bust build is running
+  console.log('[Supabase] data layer v2 — no embedded joins ✅')
 }
 
 export const supabase = createClient()
