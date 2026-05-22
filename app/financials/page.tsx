@@ -19,7 +19,7 @@ import { formatCurrency, formatDate } from '@/lib/utils'
 import { getPayments, insertPayment, getExpenses, insertExpense, getOrders, getCustomers, getSuppliers } from '@/lib/data'
 import { PAYMENT_TYPES, PAYMENT_METHODS, EXPENSE_TYPES } from '@/lib/constants'
 import type { Payment, Expense, Order, Customer, Supplier } from '@/lib/types'
-import { Plus, TrendingUp, TrendingDown, DollarSign, PiggyBank, Lock } from 'lucide-react'
+import { Plus, TrendingUp, TrendingDown, DollarSign, PiggyBank } from 'lucide-react'
 
 const PAY_DEFAULTS = (): Partial<Payment> => ({
   payment_date: new Date().toISOString().split('T')[0],
@@ -43,18 +43,7 @@ function PaymentForm({ open, onClose, orders, customers, payments, onSave }: {
     setError('')
   }
 
-  // Selecting an order auto-fills and LOCKS the customer to the order's customer
-  const handleOrderChange = (orderId: string) => {
-    if (orderId) {
-      const order = orders.find(o => o.id === orderId)
-      setForm(f => ({ ...f, order_id: orderId, customer_id: order?.customer_id || f.customer_id }))
-    } else {
-      setForm(f => ({ ...f, order_id: '' }))
-    }
-    setError('')
-  }
-
-  // Selecting a customer filters orders; clear order if it no longer matches
+  // Step 1: customer selected → clear order if it doesn't belong to new customer
   const handleCustomerChange = (customerId: string) => {
     setForm(f => {
       const orderStillMatches = customerId && f.order_id
@@ -65,16 +54,19 @@ function PaymentForm({ open, onClose, orders, customers, payments, onSave }: {
     setError('')
   }
 
-  // When order is selected, only show that order's customer orders; else show by selected customer
-  const filteredOrders = form.customer_id
-    ? orders.filter(o => o.customer_id === form.customer_id)
-    : orders
+  // Step 2: order selected → only after customer is chosen; order list is already filtered
+  const handleOrderChange = (orderId: string) => {
+    setForm(f => ({ ...f, order_id: orderId }))
+    setError('')
+  }
 
-  const lockedCustomer = form.order_id
-    ? customers.find(c => c.id === form.customer_id)
-    : null
+  // Orders shown only after customer is selected, and only their orders
+  const customerOrders = form.customer_id
+    ? orders.filter(o => o.customer_id === form.customer_id)
+    : []
 
   const handleSave = () => {
+    if (!form.customer_id) { setError('נא לבחור לקוח'); return }
     if (!form.amount || form.amount <= 0) { setError('נא להזין סכום חיובי'); return }
 
     // Duplicate: same order + amount + date
@@ -96,29 +88,29 @@ function PaymentForm({ open, onClose, orders, customers, payments, onSave }: {
       <DialogHeader title="הוסף תשלום" onClose={onClose} />
       <DialogBody className="space-y-4">
         <FormGrid>
-          {/* Order first — picking order locks the customer */}
-          <FormField label="הזמנה" htmlFor="pay_order">
-            <Select id="pay_order" value={form.order_id || ''} onChange={e => handleOrderChange(e.target.value)}>
-              <option value="">ללא הזמנה ספציפית</option>
-              {filteredOrders.map(o => (
-                <option key={o.id} value={o.id}>{o.order_number} – {o.customers?.full_name}</option>
-              ))}
+          {/* Step 1: Customer (required) */}
+          <FormField label="לקוח" required htmlFor="pay_customer" error={!form.customer_id && error === 'נא לבחור לקוח' ? error : ''}>
+            <Select id="pay_customer" value={form.customer_id || ''} onChange={e => handleCustomerChange(e.target.value)}>
+              <option value="">בחר לקוח תחילה</option>
+              {customers.map(c => <option key={c.id} value={c.id}>{c.full_name}</option>)}
             </Select>
           </FormField>
 
-          {/* Customer: locked when order is selected */}
-          <FormField label="לקוח" htmlFor="pay_customer">
-            {lockedCustomer ? (
-              <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-[#e5ddd0] bg-[#f5efe0] text-sm text-[#4a3728]">
-                <Lock size={13} className="text-[#b8934a] shrink-0" />
-                <span className="flex-1 font-medium">{lockedCustomer.full_name}</span>
-                <span className="text-xs text-[#7a6a52]">משויך להזמנה</span>
-              </div>
-            ) : (
-              <Select id="pay_customer" value={form.customer_id || ''} onChange={e => handleCustomerChange(e.target.value)}>
-                <option value="">בחר לקוח</option>
-                {customers.map(c => <option key={c.id} value={c.id}>{c.full_name}</option>)}
+          {/* Step 2: Order — only enabled after customer is selected */}
+          <FormField label="הזמנה" htmlFor="pay_order">
+            {form.customer_id ? (
+              <Select id="pay_order" value={form.order_id || ''} onChange={e => handleOrderChange(e.target.value)}>
+                <option value="">
+                  {customerOrders.length === 0 ? 'אין הזמנות ללקוח זה' : 'בחר הזמנה (אופציונלי)'}
+                </option>
+                {customerOrders.map(o => (
+                  <option key={o.id} value={o.id}>{o.order_number} — {o.description || o.jewelry_type || ''}</option>
+                ))}
               </Select>
+            ) : (
+              <div className="px-3 py-2 rounded-lg border border-[#e5ddd0] bg-[#f5efe0] text-sm text-[#7a6a52] cursor-not-allowed">
+                יש לבחור לקוח תחילה
+              </div>
             )}
           </FormField>
 
@@ -134,7 +126,7 @@ function PaymentForm({ open, onClose, orders, customers, payments, onSave }: {
               {PAYMENT_METHODS.map(m => <option key={m} value={m}>{m}</option>)}
             </Select>
           </FormField>
-          <FormField label="סכום (₪)" required htmlFor="pay_amount" error={error}>
+          <FormField label="סכום (₪)" required htmlFor="pay_amount" error={error !== 'נא לבחור לקוח' ? error : ''}>
             <Input id="pay_amount" type="number" value={form.amount || ''} onChange={e => { set('amount', Number(e.target.value)); setError('') }} placeholder="0" />
           </FormField>
           <FormField label="תאריך" htmlFor="pay_date">
