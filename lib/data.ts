@@ -2,7 +2,6 @@
  * Data access layer.
  * When NEXT_PUBLIC_DEMO_MODE=true (or Supabase env vars are absent), all reads
  * return in-memory demo data so the app works without a database.
- * Replace the demo branches with real supabase calls once connected.
  */
 import { supabase } from './supabase'
 import {
@@ -17,14 +16,6 @@ const IS_DEMO =
   process.env.NEXT_PUBLIC_DEMO_MODE === 'true' ||
   !process.env.NEXT_PUBLIC_SUPABASE_URL ||
   process.env.NEXT_PUBLIC_SUPABASE_URL === 'https://placeholder.supabase.co'
-
-function hydrateTimestamps<T extends object>(item: T): T & { created_at: string; updated_at?: string } {
-  return {
-    ...item,
-    created_at: new Date().toISOString(),
-    ...('updated_at' in item ? {} : { updated_at: new Date().toISOString() }),
-  }
-}
 
 function logQueryError(table: string, error: { message?: string; code?: string; details?: string; hint?: string }) {
   const isHostError = error.message?.includes('Host not in allowlist')
@@ -44,6 +35,32 @@ function logQueryError(table: string, error: { message?: string; code?: string; 
       hint: error.hint,
     })
   }
+}
+
+// ─── Join helpers ─────────────────────────────────────────────────────────────
+// These avoid PGRST201 "ambiguous relationship" errors that occur when two tables
+// have multiple FK references to each other (e.g. quotes↔leads, orders↔quotes).
+
+function uniqueIds<T>(records: T[], key: keyof T): string[] {
+  return [...new Set(records.map((r: T) => r[key] as unknown as string).filter(Boolean))]
+}
+
+function mapById<T extends { id: string }>(records: T[] = []): Map<string, T> {
+  return new Map(records.map(r => [r.id, r]))
+}
+
+async function fetchByIds<T>(
+  table: string,
+  ids: string[],
+  columns = '*',
+): Promise<T[]> {
+  if (!ids.length) return []
+  const { data, error } = await supabase.from(table).select(columns).in('id', ids)
+  if (error) {
+    console.error(`[Supabase] fetchByIds failed for ${table}:`, error)
+    return []
+  }
+  return (data ?? []) as T[]
 }
 
 // ─── Database health check ────────────────────────────────────────────────────
@@ -110,7 +127,7 @@ export async function getLeads(): Promise<Lead[]> {
   if (IS_DEMO) return demoLeads.map(l => ({ ...l, created_at: '', updated_at: '' }))
   const { data, error } = await supabase
     .from('leads')
-    .select('*, customers(*)')
+    .select('*')
     .order('created_at', { ascending: false })
   if (error) { logQueryError('leads', error); throw error }
   return data as Lead[]
@@ -118,9 +135,7 @@ export async function getLeads(): Promise<Lead[]> {
 
 export async function upsertLead(lead: Partial<Lead>): Promise<Lead> {
   if (IS_DEMO) return { ...lead, id: lead.id || crypto.randomUUID(), lead_status: lead.lead_status || 'חדש', priority: lead.priority || 'בינוני', created_at: '', updated_at: '' } as Lead
-  // Strip relation/joined fields that are not DB columns
   const { customers: _c, quotes: _q, orders: _o, ...rest } = lead as Lead & { customers?: unknown; quotes?: unknown; orders?: unknown }
-  // Explicit whitelist — only base schema columns
   const payload: Record<string, unknown> = {
     customer_id: rest.customer_id || null,
     full_name: rest.full_name,
@@ -142,11 +157,8 @@ export async function upsertLead(lead: Partial<Lead>): Promise<Lead> {
     follow_up_date: rest.follow_up_date,
     notes: rest.notes,
   }
-  // Remove undefined values so existing DB rows are not overwritten with null
   Object.keys(payload).forEach(k => payload[k] === undefined && delete payload[k])
-  // Include id only for updates
   if (rest.id) payload.id = rest.id
-  // Phase 3 columns — skip entirely if undefined so missing-column errors don't occur
   if (rest.quote_id !== undefined) payload.quote_id = rest.quote_id || null
   if (rest.order_id !== undefined) payload.order_id = rest.order_id || null
 
@@ -167,15 +179,29 @@ export async function getLead(id: string): Promise<Lead> {
     if (!lead) throw new Error('Not found')
     const customer = demoCustomers.find(c => c.id === lead.customer_id)
     const linkedQuote = lead.quote_id ? demoQuotes.find(q => q.id === lead.quote_id) : undefined
-    return { ...lead, created_at: '', updated_at: '', customers: customer ? { ...customer, created_at: '', updated_at: '' } : undefined, quotes: linkedQuote ? { ...linkedQuote, created_at: '', updated_at: '' } : undefined } as Lead
+    return {
+      ...lead,
+      created_at: '', updated_at: '',
+      customers: customer ? { ...customer, created_at: '', updated_at: '' } : undefined,
+      quotes: linkedQuote ? { ...linkedQuote, created_at: '', updated_at: '' } : undefined,
+    } as Lead
   }
-  const { data, error } = await supabase
-    .from('leads')
-    .select('*, customers(*), quotes(*)')
-    .eq('id', id)
-    .single()
+  const { data, error } = await supabase.from('leads').select('*').eq('id', id).single()
   if (error) throw error
-  return data as Lead
+  const lead = data as Lead
+  const [customerResult, quoteResult] = await Promise.all([
+    lead.customer_id
+      ? supabase.from('customers').select('*').eq('id', lead.customer_id).maybeSingle()
+      : Promise.resolve({ data: null }),
+    lead.quote_id
+      ? supabase.from('quotes').select('*').eq('id', lead.quote_id).maybeSingle()
+      : Promise.resolve({ data: null }),
+  ])
+  return {
+    ...lead,
+    customers: customerResult.data as Customer ?? undefined,
+    quotes: quoteResult.data as Quote ?? undefined,
+  }
 }
 
 export async function findCustomerByContact(
@@ -212,7 +238,7 @@ export async function getQuotes(): Promise<Quote[]> {
   if (IS_DEMO) return demoQuotes.map(q => ({ ...q, created_at: '', updated_at: '' }))
   const { data, error } = await supabase
     .from('quotes')
-    .select('*, customers(*), leads(*)')
+    .select('*')
     .order('created_at', { ascending: false })
   if (error) { logQueryError('quotes', error); throw error }
   return data as Quote[]
@@ -220,9 +246,7 @@ export async function getQuotes(): Promise<Quote[]> {
 
 export async function upsertQuote(quote: Partial<Quote>): Promise<Quote> {
   if (IS_DEMO) return { ...quote, id: quote.id || crypto.randomUUID(), quote_status: quote.quote_status || 'טיוטה', diamond_cost: quote.diamond_cost ?? 0, gold_cost: quote.gold_cost ?? 0, labor_cost: quote.labor_cost ?? 0, setting_cost: quote.setting_cost ?? 0, packaging_cost: quote.packaging_cost ?? 0, shipping_cost: quote.shipping_cost ?? 0, other_cost: quote.other_cost ?? 0, total_cost: quote.total_cost ?? 0, sale_price: quote.sale_price ?? 0, expected_profit: quote.expected_profit ?? 0, profit_margin: quote.profit_margin ?? 0, created_at: '', updated_at: '' } as Quote
-  // Strip relation/joined fields that are not DB columns
   const { customers: _c, leads: _l, ...rest } = quote as Quote & { customers?: unknown; leads?: unknown }
-  // Explicit whitelist — only base schema columns
   const payload: Record<string, unknown> = {
     quote_number: rest.quote_number,
     customer_id: rest.customer_id || null,
@@ -238,7 +262,6 @@ export async function upsertQuote(quote: Partial<Quote>): Promise<Quote> {
     diamond_color: rest.diamond_color || null,
     diamond_clarity: rest.diamond_clarity || null,
     diamond_cut: rest.diamond_cut || null,
-    // Ensure numeric fields are numbers
     diamond_cost: Number(rest.diamond_cost ?? 0),
     gold_cost: Number(rest.gold_cost ?? 0),
     labor_cost: Number(rest.labor_cost ?? 0),
@@ -255,11 +278,8 @@ export async function upsertQuote(quote: Partial<Quote>): Promise<Quote> {
     estimated_delivery_time: rest.estimated_delivery_time || null,
     notes: rest.notes || null,
   }
-  // Remove undefined values so existing DB rows are not overwritten with null
   Object.keys(payload).forEach(k => payload[k] === undefined && delete payload[k])
-  // Include id only for updates
   if (rest.id) payload.id = rest.id
-  // Phase 3 column — skip entirely if undefined so missing-column errors don't occur
   if (rest.order_id !== undefined) payload.order_id = rest.order_id || null
 
   const { data, error } = await supabase.from('quotes').upsert(payload).select().single()
@@ -279,7 +299,7 @@ export async function getOrders(): Promise<Order[]> {
   if (IS_DEMO) return demoOrders.map(o => ({ ...o, created_at: '', updated_at: '' }))
   const { data, error } = await supabase
     .from('orders')
-    .select('*, customers(*), quotes(*), suppliers(*)')
+    .select('*')
     .order('created_at', { ascending: false })
   if (error) { logQueryError('orders', error); throw error }
   return data as Order[]
@@ -287,7 +307,6 @@ export async function getOrders(): Promise<Order[]> {
 
 export async function upsertOrder(order: Partial<Order>): Promise<Order> {
   if (IS_DEMO) return { ...order, id: order.id || crypto.randomUUID(), order_status: order.order_status || 'מחכה למקדמה', payment_status: order.payment_status || 'לא שולם', sale_price: order.sale_price ?? 0, deposit_amount: order.deposit_amount ?? 0, balance_due: order.balance_due ?? 0, total_cost: order.total_cost ?? 0, net_profit: order.net_profit ?? 0, profit_margin: order.profit_margin ?? 0, created_at: '', updated_at: '' } as Order
-  // Explicit whitelist — only base schema columns. Never spread unknown fields.
   const payload: Record<string, unknown> = {
     order_number: order.order_number,
     customer_id: order.customer_id || null,
@@ -314,9 +333,7 @@ export async function upsertOrder(order: Partial<Order>): Promise<Order> {
     delivery_date: order.delivery_date || null,
     notes: order.notes || null,
   }
-  // Include id only for updates (new rows get a DB-generated uuid)
   if (order.id) payload.id = order.id
-  // Phase 3 columns — skip entirely if undefined so missing-column errors don't occur
   if (order.lead_id !== undefined) payload.lead_id = order.lead_id || null
   if (order.carat !== undefined) payload.carat = Number(order.carat)
   if (order.production_notes !== undefined) payload.production_notes = order.production_notes || null
@@ -338,7 +355,7 @@ export async function getPayments(): Promise<Payment[]> {
   if (IS_DEMO) return demoPayments.map(p => ({ ...p, created_at: '' }))
   const { data, error } = await supabase
     .from('payments')
-    .select('*, customers(*), orders(*)')
+    .select('*')
     .order('payment_date', { ascending: false })
   if (error) { logQueryError('payments', error); throw error }
   return data as Payment[]
@@ -357,7 +374,7 @@ export async function getExpenses(): Promise<Expense[]> {
   if (IS_DEMO) return demoExpenses.map(e => ({ ...e, created_at: '' }))
   const { data, error } = await supabase
     .from('expenses')
-    .select('*, suppliers(*), orders(*)')
+    .select('*')
     .order('expense_date', { ascending: false })
   if (error) { logQueryError('expenses', error); throw error }
   return data as Expense[]
@@ -401,9 +418,22 @@ export async function getQuote(id: string): Promise<Quote> {
     const customer = demoCustomers.find(c => c.id === q.customer_id)
     return { ...q, created_at: '', updated_at: '', customers: customer ? { ...customer, created_at: '', updated_at: '' } : undefined }
   }
-  const { data, error } = await supabase.from('quotes').select('*, customers(*), leads(*)').eq('id', id).single()
+  const { data, error } = await supabase.from('quotes').select('*').eq('id', id).single()
   if (error) throw error
-  return data as Quote
+  const quote = data as Quote
+  const [customerResult, leadResult] = await Promise.all([
+    quote.customer_id
+      ? supabase.from('customers').select('*').eq('id', quote.customer_id).maybeSingle()
+      : Promise.resolve({ data: null }),
+    quote.lead_id
+      ? supabase.from('leads').select('*').eq('id', quote.lead_id).maybeSingle()
+      : Promise.resolve({ data: null }),
+  ])
+  return {
+    ...quote,
+    customers: customerResult.data as Customer ?? undefined,
+    leads: leadResult.data as Lead ?? undefined,
+  }
 }
 
 export async function getOrder(id: string): Promise<Order> {
@@ -421,13 +451,26 @@ export async function getOrder(id: string): Promise<Order> {
       payments, expenses,
     }
   }
-  const { data, error } = await supabase
-    .from('orders')
-    .select('*, customers(*), suppliers(*), payments(*), expenses(*)')
-    .eq('id', id)
-    .single()
+  const { data, error } = await supabase.from('orders').select('*').eq('id', id).single()
   if (error) throw error
-  return data as Order
+  const order = data as Order
+  const [customerResult, supplierResult, paymentsResult, expensesResult] = await Promise.all([
+    order.customer_id
+      ? supabase.from('customers').select('*').eq('id', order.customer_id).maybeSingle()
+      : Promise.resolve({ data: null }),
+    order.supplier_id
+      ? supabase.from('suppliers').select('*').eq('id', order.supplier_id).maybeSingle()
+      : Promise.resolve({ data: null }),
+    supabase.from('payments').select('*').eq('order_id', order.id),
+    supabase.from('expenses').select('*').eq('order_id', order.id),
+  ])
+  return {
+    ...order,
+    customers: customerResult.data as Customer ?? undefined,
+    suppliers: supplierResult.data as Supplier ?? undefined,
+    payments: (paymentsResult.data ?? []) as Payment[],
+    expenses: (expensesResult.data ?? []) as Expense[],
+  }
 }
 
 export async function getCustomerFull(id: string): Promise<Customer> {
@@ -438,10 +481,17 @@ export async function getCustomerFull(id: string): Promise<Customer> {
     const orders = demoOrders.filter(o => o.customer_id === c.id).map(o => ({ ...o, created_at: '', updated_at: '' }))
     return { ...c, created_at: '', updated_at: '', converted_leads: convertedLeads, orders }
   }
-  const { data, error } = await supabase.from('customers').select('*, orders(*)').eq('id', id).single()
-  if (error) throw error
-  const { data: leads } = await supabase.from('leads').select('*').eq('customer_id', id).not('order_id', 'is', null)
-  return { ...(data as Customer), converted_leads: (leads || []) as Lead[] }
+  const [customerResult, ordersResult, leadsResult] = await Promise.all([
+    supabase.from('customers').select('*').eq('id', id).single(),
+    supabase.from('orders').select('*').eq('customer_id', id),
+    supabase.from('leads').select('*').eq('customer_id', id).not('order_id', 'is', null),
+  ])
+  if (customerResult.error) throw customerResult.error
+  return {
+    ...(customerResult.data as Customer),
+    orders: (ordersResult.data ?? []) as Order[],
+    converted_leads: (leadsResult.data ?? []) as Lead[],
+  }
 }
 
 // ─── Tasks ────────────────────────────────────────────────────────────────────
