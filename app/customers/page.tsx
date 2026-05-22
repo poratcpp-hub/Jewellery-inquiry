@@ -12,9 +12,9 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { TableSkeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
 import { useDebounce, useTableSort } from '@/lib/hooks'
-import { formatDate, exportCsv } from '@/lib/utils'
-import { getCustomers, upsertCustomer, deleteCustomer } from '@/lib/data'
-import type { Customer } from '@/lib/types'
+import { formatDate, exportCsv, generateQuoteNumber } from '@/lib/utils'
+import { getCustomers, upsertCustomer, deleteCustomer, getLeads, upsertLead, upsertQuote } from '@/lib/data'
+import type { Customer, Lead } from '@/lib/types'
 import { Plus, Search, Pencil, Trash2, Phone, AtSign, Download } from 'lucide-react'
 
 function WaLink({ phone }: { phone: string }) {
@@ -37,6 +37,7 @@ function WaLink({ phone }: { phone: string }) {
 export default function CustomersPage() {
   const { toast } = useToast()
   const [customers, setCustomers] = useState<Customer[]>([])
+  const [leads, setLeads] = useState<Lead[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [formOpen, setFormOpen] = useState(false)
@@ -44,8 +45,8 @@ export default function CustomersPage() {
   const [deleteTarget, setDeleteTarget] = useState<Customer | undefined>()
 
   useEffect(() => {
-    getCustomers()
-      .then(setCustomers)
+    Promise.all([getCustomers(), getLeads()])
+      .then(([c, l]) => { setCustomers(c); setLeads(l) })
       .catch(() => toast({ type: 'error', title: 'שגיאה בטעינת לקוחות' }))
       .finally(() => setLoading(false))
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
@@ -82,14 +83,45 @@ export default function CustomersPage() {
         setCustomers(prev => prev.map(c => c.id === editing.id ? saved : c))
         toast({ type: 'success', title: 'הלקוח עודכן בהצלחה' })
       } else {
-        setCustomers(prev => [{ ...saved, id: saved.id || Math.random().toString(36).slice(2) }, ...prev])
-        toast({ type: 'success', title: 'הלקוח נוסף בהצלחה' })
+        const customerId = saved.id || Math.random().toString(36).slice(2)
+        setCustomers(prev => [{ ...saved, id: customerId }, ...prev])
+
+        // Auto-create lead + quote if no existing lead matches by phone
+        const hasLead = saved.phone ? leads.some(l => l.phone === saved.phone) : false
+        if (!hasLead) {
+          const [newLead, newQuote] = await Promise.all([
+            upsertLead({
+              full_name: saved.full_name,
+              phone: saved.phone,
+              source: saved.source,
+              customer_id: customerId,
+              lead_status: 'חדש',
+              priority: 'בינוני',
+            }),
+            upsertQuote({
+              quote_number: generateQuoteNumber(),
+              customer_id: customerId,
+              quote_status: 'טיוטה',
+              diamond_cost: 0, gold_cost: 0, labor_cost: 0,
+              setting_cost: 0, packaging_cost: 0, shipping_cost: 0, other_cost: 0,
+              total_cost: 0, sale_price: 0, expected_profit: 0, profit_margin: 0,
+            }),
+          ])
+          setLeads(prev => [newLead, ...prev])
+          toast({
+            type: 'info',
+            title: `נפתחו אוטומטית עבור "${saved.full_name}"`,
+            description: `ליד חדש + הצעת מחיר ${newQuote.quote_number} — יש למלא את הפרטים`,
+          })
+        } else {
+          toast({ type: 'success', title: 'הלקוח נוסף בהצלחה' })
+        }
       }
     } catch {
       toast({ type: 'error', title: 'שגיאה בשמירת הלקוח' })
     }
     setEditing(undefined)
-  }, [editing, customers, toast])
+  }, [editing, customers, leads, toast])
 
   const handleDelete = useCallback(async () => {
     if (!deleteTarget) return
