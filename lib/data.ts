@@ -26,12 +26,49 @@ function hydrateTimestamps<T extends object>(item: T): T & { created_at: string;
   }
 }
 
+function logQueryError(table: string, error: { message?: string; code?: string; details?: string; hint?: string }) {
+  const isHostError = error.message?.includes('Host not in allowlist')
+  if (isHostError) {
+    console.error(
+      `[Supabase] ❌ "${table}" → Host not in allowlist\n` +
+      `  Your key (sb_publishable_...) requires a host allowlist in Supabase.\n` +
+      `  Fix: Supabase Dashboard → Project Settings → API → API Keys\n` +
+      `  1. Add your domain/localhost to the publishable key allowlist, OR\n` +
+      `  2. Replace the key with the "anon public" JWT key (starts with eyJ...)`
+    )
+  } else {
+    console.error(`[Supabase] ❌ query on "${table}" failed:`, {
+      message: error.message,
+      code: error.code,
+      details: error.details,
+      hint: error.hint,
+    })
+  }
+}
+
+// ─── Database health check ────────────────────────────────────────────────────
+
+export async function checkDatabaseConnection(): Promise<{ ok: boolean; error?: string; isHostError?: boolean }> {
+  if (IS_DEMO) return { ok: true }
+  const { data, error } = await supabase.from('customers').select('id').limit(1)
+  if (error) {
+    logQueryError('customers', error)
+    return {
+      ok: false,
+      error: error.message,
+      isHostError: error.message?.includes('Host not in allowlist'),
+    }
+  }
+  console.log('[Supabase] ✅ DB connection OK, customers table accessible')
+  return { ok: true }
+}
+
 // ─── Customers ───────────────────────────────────────────────────────────────
 
 export async function getCustomers(): Promise<Customer[]> {
   if (IS_DEMO) return demoCustomers.map(c => ({ ...c, created_at: '', updated_at: '' }))
   const { data, error } = await supabase.from('customers').select('*').order('created_at', { ascending: false })
-  if (error) throw error
+  if (error) { logQueryError('customers', error); throw error }
   return data as Customer[]
 }
 
@@ -75,7 +112,7 @@ export async function getLeads(): Promise<Lead[]> {
     .from('leads')
     .select('*, customers(*)')
     .order('created_at', { ascending: false })
-  if (error) throw error
+  if (error) { logQueryError('leads', error); throw error }
   return data as Lead[]
 }
 
@@ -177,7 +214,7 @@ export async function getQuotes(): Promise<Quote[]> {
     .from('quotes')
     .select('*, customers(*), leads(*)')
     .order('created_at', { ascending: false })
-  if (error) throw error
+  if (error) { logQueryError('quotes', error); throw error }
   return data as Quote[]
 }
 
@@ -244,7 +281,7 @@ export async function getOrders(): Promise<Order[]> {
     .from('orders')
     .select('*, customers(*), quotes(*), suppliers(*)')
     .order('created_at', { ascending: false })
-  if (error) throw error
+  if (error) { logQueryError('orders', error); throw error }
   return data as Order[]
 }
 
@@ -303,7 +340,7 @@ export async function getPayments(): Promise<Payment[]> {
     .from('payments')
     .select('*, customers(*), orders(*)')
     .order('payment_date', { ascending: false })
-  if (error) throw error
+  if (error) { logQueryError('payments', error); throw error }
   return data as Payment[]
 }
 
@@ -322,7 +359,7 @@ export async function getExpenses(): Promise<Expense[]> {
     .from('expenses')
     .select('*, suppliers(*), orders(*)')
     .order('expense_date', { ascending: false })
-  if (error) throw error
+  if (error) { logQueryError('expenses', error); throw error }
   return data as Expense[]
 }
 
@@ -338,7 +375,7 @@ export async function insertExpense(expense: Partial<Expense>): Promise<Expense>
 export async function getSuppliers(): Promise<Supplier[]> {
   if (IS_DEMO) return demoSuppliers.map(s => ({ ...s, created_at: '' }))
   const { data, error } = await supabase.from('suppliers').select('*').order('name')
-  if (error) throw error
+  if (error) { logQueryError('suppliers', error); throw error }
   return data as Supplier[]
 }
 
@@ -415,7 +452,7 @@ export async function getTasks(): Promise<Task[]> {
     .from('tasks')
     .select('*')
     .order('due_date', { ascending: true })
-  if (error) throw error
+  if (error) { logQueryError('tasks', error); throw error }
   return data as Task[]
 }
 
