@@ -69,49 +69,62 @@ export default function CustomersPage() {
   const { sorted, sortKey, sortDir, toggleSort } = useTableSort<Customer>(filtered, 'full_name')
 
   const handleSave = useCallback(async (data: Partial<Customer>) => {
-    try {
-      if (!editing && data.phone) {
-        const dup = customers.find(c => c.phone === data.phone)
-        if (dup) {
-          toast({ type: 'error', title: 'כפילות', description: `כבר קיים לקוח עם מספר זה: "${dup.full_name}"` })
-          return
-        }
+    if (!editing && data.phone) {
+      const dup = customers.find(c => c.phone === data.phone)
+      if (dup) {
+        toast({ type: 'error', title: 'כפילות', description: `כבר קיים לקוח עם מספר זה: "${dup.full_name}"` })
+        return
       }
-      const saved = await upsertCustomer(editing ? { ...editing, ...data } : data)
-      if (editing) {
-        setCustomers(prev => prev.map(c => c.id === editing.id ? saved : c))
-        toast({ type: 'success', title: 'הלקוח עודכן בהצלחה' })
-      } else {
-        setCustomers(prev => [saved, ...prev])
+    }
 
-        // Always auto-open a lead + draft quote for every new customer
-        const [, newQuote] = await Promise.all([
-          upsertLead({
-            full_name: saved.full_name,
-            phone: saved.phone,
-            source: saved.source,
-            customer_id: saved.id,
-            lead_status: 'חדש',
-            priority: 'בינוני',
-          }),
-          upsertQuote({
-            quote_number: generateQuoteNumber(),
-            customer_id: saved.id,
-            quote_status: 'טיוטה',
-            diamond_cost: 0, gold_cost: 0, labor_cost: 0,
-            setting_cost: 0, packaging_cost: 0, shipping_cost: 0, other_cost: 0,
-            total_cost: 0, sale_price: 0, expected_profit: 0, profit_margin: 0,
-          }),
-        ])
-        toast({
-          type: 'info',
-          title: `נפתחו אוטומטית עבור "${saved.full_name}"`,
-          description: `ליד חדש + הצעת מחיר ${newQuote.quote_number} — יש למלא את הפרטים`,
-        })
-      }
+    let saved: Customer
+    try {
+      saved = await upsertCustomer(editing ? { ...editing, ...data } : data)
     } catch {
       toast({ type: 'error', title: 'שגיאה בשמירת הלקוח' })
+      return
     }
+
+    if (editing) {
+      setCustomers(prev => prev.map(c => c.id === editing.id ? saved : c))
+      toast({ type: 'success', title: 'הלקוח עודכן בהצלחה' })
+      setEditing(undefined)
+      return
+    }
+
+    setCustomers(prev => [saved, ...prev])
+
+    // Auto-open lead + quote for every new customer — separate try/catch so
+    // a Supabase / RLS failure here doesn't swallow the customer success.
+    try {
+      const [, newQuote] = await Promise.all([
+        upsertLead({
+          full_name: saved.full_name,
+          phone: saved.phone,
+          source: saved.source,
+          customer_id: saved.id,
+          lead_status: 'חדש',
+          priority: 'בינוני',
+        }),
+        upsertQuote({
+          quote_number: generateQuoteNumber(),
+          customer_id: saved.id,
+          quote_status: 'טיוטה',
+          diamond_cost: 0, gold_cost: 0, labor_cost: 0,
+          setting_cost: 0, packaging_cost: 0, shipping_cost: 0, other_cost: 0,
+          total_cost: 0, sale_price: 0, expected_profit: 0, profit_margin: 0,
+        }),
+      ])
+      toast({
+        type: 'info',
+        title: `נפתחו אוטומטית עבור "${saved.full_name}"`,
+        description: `ליד חדש + הצעת מחיר ${newQuote.quote_number} — יש למלא את הפרטים`,
+      })
+    } catch (err) {
+      console.error('Auto-create lead/quote failed:', err)
+      toast({ type: 'warning', title: 'הלקוח נוסף', description: 'לא הצלחנו לפתוח ליד/הצעת מחיר אוטומטית' })
+    }
+
     setEditing(undefined)
   }, [editing, customers, toast])
 
