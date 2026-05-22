@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Dialog, DialogHeader, DialogBody, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -25,20 +25,21 @@ const DEFAULTS: Partial<Customer> = { customer_status: 'חדש' }
 export function CustomerForm({ open, onClose, customer, onSave }: CustomerFormProps) {
   const [form, setForm] = useState<Partial<Customer>>(customer || DEFAULTS)
   const [errors, setErrors] = useState<Record<string, string>>({})
-  const [isDirty, setIsDirty] = useState(false)
+  const isDirtyRef = useRef(false)
   const [confirmClose, setConfirmClose] = useState(false)
 
   useEffect(() => {
     if (open) {
       setForm(customer || DEFAULTS)
       setErrors({})
-      setIsDirty(false)
+      isDirtyRef.current = false
+      setConfirmClose(false)
     }
   }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const set = (key: keyof Customer, value: string) => {
     setForm(f => ({ ...f, [key]: value }))
-    setIsDirty(true)
+    isDirtyRef.current = true
     if (errors[key]) setErrors(e => ({ ...e, [key]: '' }))
   }
 
@@ -56,7 +57,7 @@ export function CustomerForm({ open, onClose, customer, onSave }: CustomerFormPr
   }
 
   const handleClose = () => {
-    if (isDirty) {
+    if (isDirtyRef.current) {
       setConfirmClose(true)
     } else {
       onClose()

@@ -57,13 +57,24 @@ export default function LeadsPage() {
   const handleSave = useCallback(async (data: Partial<Lead>) => {
     try {
       if (!editing && data.phone) {
-        const dup = leads.find(l => l.phone === data.phone)
-        if (dup) {
-          toast({ type: 'error', title: 'כפילות', description: `כבר קיים ליד עם מספר זה: "${dup.full_name}"` })
+        // Block duplicate leads by phone
+        const dupLead = leads.find(l => l.phone === data.phone)
+        if (dupLead) {
+          toast({ type: 'error', title: 'כפילות', description: `כבר קיים ליד עם מספר זה: "${dupLead.full_name}"` })
           return
         }
       }
-      const saved = await upsertLead(editing ? { ...editing, ...data } : data)
+
+      // Auto-link customer by phone on new lead creation
+      let finalData = { ...data }
+      if (!editing && !data.customer_id && data.phone) {
+        const existingCustomer = customers.find(c => c.phone === data.phone)
+        if (existingCustomer) {
+          finalData = { ...finalData, customer_id: existingCustomer.id }
+        }
+      }
+
+      const saved = await upsertLead(editing ? { ...editing, ...finalData } : finalData)
       const withCustomer = { ...saved, customers: customers.find(c => c.id === saved.customer_id) }
       if (editing) {
         setLeads(prev => prev.map(l => l.id === editing.id ? withCustomer : l))

@@ -19,7 +19,7 @@ import { formatCurrency, formatDate } from '@/lib/utils'
 import { getPayments, insertPayment, getExpenses, insertExpense, getOrders, getCustomers, getSuppliers } from '@/lib/data'
 import { PAYMENT_TYPES, PAYMENT_METHODS, EXPENSE_TYPES } from '@/lib/constants'
 import type { Payment, Expense, Order, Customer, Supplier } from '@/lib/types'
-import { Plus, TrendingUp, TrendingDown, DollarSign, PiggyBank } from 'lucide-react'
+import { Plus, TrendingUp, TrendingDown, DollarSign, PiggyBank, Lock } from 'lucide-react'
 
 const PAY_DEFAULTS = (): Partial<Payment> => ({
   payment_date: new Date().toISOString().split('T')[0],
@@ -43,44 +43,41 @@ function PaymentForm({ open, onClose, orders, customers, payments, onSave }: {
     setError('')
   }
 
-  // When order is picked, auto-fill matching customer
+  // Selecting an order auto-fills and LOCKS the customer to the order's customer
   const handleOrderChange = (orderId: string) => {
-    set('order_id', orderId)
     if (orderId) {
       const order = orders.find(o => o.id === orderId)
-      if (order?.customer_id) setForm(f => ({ ...f, order_id: orderId, customer_id: order.customer_id }))
+      setForm(f => ({ ...f, order_id: orderId, customer_id: order?.customer_id || f.customer_id }))
+    } else {
+      setForm(f => ({ ...f, order_id: '' }))
     }
+    setError('')
   }
 
-  // When customer is picked, clear order if it doesn't belong to them
+  // Selecting a customer filters orders; clear order if it no longer matches
   const handleCustomerChange = (customerId: string) => {
     setForm(f => {
-      const keepOrder = customerId && f.order_id
+      const orderStillMatches = customerId && f.order_id
         ? orders.find(o => o.id === f.order_id)?.customer_id === customerId
         : false
-      return { ...f, customer_id: customerId, order_id: keepOrder ? f.order_id : '' }
+      return { ...f, customer_id: customerId, order_id: orderStillMatches ? f.order_id : '' }
     })
     setError('')
   }
 
-  // Only show orders belonging to the selected customer (or all if none selected)
+  // When order is selected, only show that order's customer orders; else show by selected customer
   const filteredOrders = form.customer_id
     ? orders.filter(o => o.customer_id === form.customer_id)
     : orders
 
+  const lockedCustomer = form.order_id
+    ? customers.find(c => c.id === form.customer_id)
+    : null
+
   const handleSave = () => {
     if (!form.amount || form.amount <= 0) { setError('נא להזין סכום חיובי'); return }
 
-    // Cross-check: if both selected, ensure the order belongs to the customer
-    if (form.customer_id && form.order_id) {
-      const order = orders.find(o => o.id === form.order_id)
-      if (order && order.customer_id && order.customer_id !== form.customer_id) {
-        setError('ההזמנה שנבחרה אינה שייכת ללקוח זה')
-        return
-      }
-    }
-
-    // Duplicate: same order + same amount + same date
+    // Duplicate: same order + amount + date
     if (form.order_id && form.amount && form.payment_date) {
       const dup = payments.find(p =>
         p.order_id === form.order_id &&
@@ -90,7 +87,8 @@ function PaymentForm({ open, onClose, orders, customers, payments, onSave }: {
       if (dup) { setError('קיים תשלום זהה עבור הזמנה זו באותו תאריך וסכום'); return }
     }
 
-    onSave(form); onClose()
+    onSave(form)
+    onClose()
   }
 
   return (
@@ -98,20 +96,32 @@ function PaymentForm({ open, onClose, orders, customers, payments, onSave }: {
       <DialogHeader title="הוסף תשלום" onClose={onClose} />
       <DialogBody className="space-y-4">
         <FormGrid>
-          <FormField label="לקוח" htmlFor="pay_customer">
-            <Select id="pay_customer" value={form.customer_id || ''} onChange={e => handleCustomerChange(e.target.value)}>
-              <option value="">בחר לקוח</option>
-              {customers.map(c => <option key={c.id} value={c.id}>{c.full_name}</option>)}
-            </Select>
-          </FormField>
+          {/* Order first — picking order locks the customer */}
           <FormField label="הזמנה" htmlFor="pay_order">
             <Select id="pay_order" value={form.order_id || ''} onChange={e => handleOrderChange(e.target.value)}>
-              <option value="">{form.customer_id && filteredOrders.length === 0 ? 'אין הזמנות ללקוח זה' : 'בחר הזמנה'}</option>
+              <option value="">ללא הזמנה ספציפית</option>
               {filteredOrders.map(o => (
                 <option key={o.id} value={o.id}>{o.order_number} – {o.customers?.full_name}</option>
               ))}
             </Select>
           </FormField>
+
+          {/* Customer: locked when order is selected */}
+          <FormField label="לקוח" htmlFor="pay_customer">
+            {lockedCustomer ? (
+              <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-[#e5ddd0] bg-[#f5efe0] text-sm text-[#4a3728]">
+                <Lock size={13} className="text-[#b8934a] shrink-0" />
+                <span className="flex-1 font-medium">{lockedCustomer.full_name}</span>
+                <span className="text-xs text-[#7a6a52]">משויך להזמנה</span>
+              </div>
+            ) : (
+              <Select id="pay_customer" value={form.customer_id || ''} onChange={e => handleCustomerChange(e.target.value)}>
+                <option value="">בחר לקוח</option>
+                {customers.map(c => <option key={c.id} value={c.id}>{c.full_name}</option>)}
+              </Select>
+            )}
+          </FormField>
+
           <FormField label="סוג תשלום" htmlFor="pay_type">
             <Select id="pay_type" value={form.payment_type || ''} onChange={e => set('payment_type', e.target.value)}>
               <option value="">בחר</option>
@@ -166,7 +176,7 @@ function ExpenseForm({ open, onClose, orders, suppliers, expenses, onSave }: {
   const handleSave = () => {
     if (!form.amount || form.amount <= 0) { setError('נא להזין סכום חיובי'); return }
 
-    // Duplicate: same order + same amount + same date + same type
+    // Duplicate: same order + amount + date + type
     if (form.order_id && form.amount && form.expense_date) {
       const dup = expenses.find(e =>
         e.order_id === form.order_id &&
@@ -177,7 +187,8 @@ function ExpenseForm({ open, onClose, orders, suppliers, expenses, onSave }: {
       if (dup) { setError('קיימת הוצאה זהה עבור הזמנה זו באותו תאריך, סכום וסוג'); return }
     }
 
-    onSave(form); onClose()
+    onSave(form)
+    onClose()
   }
 
   return (

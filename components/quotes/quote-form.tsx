@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Dialog, DialogHeader, DialogBody, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -51,13 +51,14 @@ const makeDefaults = (): Partial<Quote> => ({
 
 export function QuoteForm({ open, onClose, quote, customers, onSave }: QuoteFormProps) {
   const [form, setForm] = useState<Partial<Quote>>(quote || makeDefaults())
-  const [isDirty, setIsDirty] = useState(false)
+  const isDirtyRef = useRef(false)
   const [confirmClose, setConfirmClose] = useState(false)
 
   useEffect(() => {
     if (open) {
       setForm(quote || makeDefaults())
-      setIsDirty(false)
+      isDirtyRef.current = false
+      setConfirmClose(false)
     }
   }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -65,7 +66,7 @@ export function QuoteForm({ open, onClose, quote, customers, onSave }: QuoteForm
 
   const set = (key: keyof Quote, value: string | number | boolean) => {
     setForm(f => ({ ...f, [key]: value }))
-    setIsDirty(true)
+    isDirtyRef.current = true
   }
 
   const handleSave = () => {
@@ -75,7 +76,7 @@ export function QuoteForm({ open, onClose, quote, customers, onSave }: QuoteForm
   }
 
   const handleClose = () => {
-    if (isDirty) {
+    if (isDirtyRef.current) {
       setConfirmClose(true)
     } else {
       onClose()

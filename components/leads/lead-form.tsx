@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Dialog, DialogHeader, DialogBody, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -24,20 +24,21 @@ const DEFAULTS: Partial<Lead> = { lead_status: 'חדש', priority: 'בינוני
 export function LeadForm({ open, onClose, lead, customers = [], onSave }: LeadFormProps) {
   const [form, setForm] = useState<Partial<Lead>>(lead || DEFAULTS)
   const [errors, setErrors] = useState<Record<string, string>>({})
-  const [isDirty, setIsDirty] = useState(false)
+  const isDirtyRef = useRef(false)
   const [confirmClose, setConfirmClose] = useState(false)
 
   useEffect(() => {
     if (open) {
       setForm(lead || DEFAULTS)
       setErrors({})
-      setIsDirty(false)
+      isDirtyRef.current = false
+      setConfirmClose(false)
     }
   }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const set = (key: keyof Lead, value: string | number) => {
     setForm(f => ({ ...f, [key]: value }))
-    setIsDirty(true)
+    isDirtyRef.current = true
     if (errors[key as string]) setErrors(e => ({ ...e, [key]: '' }))
   }
 
@@ -55,7 +56,7 @@ export function LeadForm({ open, onClose, lead, customers = [], onSave }: LeadFo
   }
 
   const handleClose = () => {
-    if (isDirty) {
+    if (isDirtyRef.current) {
       setConfirmClose(true)
     } else {
       onClose()
