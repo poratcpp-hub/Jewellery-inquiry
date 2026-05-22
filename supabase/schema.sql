@@ -203,15 +203,19 @@ begin
 end;
 $$ language plpgsql;
 
+drop trigger if exists customers_updated_at on customers;
 create trigger customers_updated_at before update on customers
   for each row execute procedure update_updated_at_column();
 
+drop trigger if exists leads_updated_at on leads;
 create trigger leads_updated_at before update on leads
   for each row execute procedure update_updated_at_column();
 
+drop trigger if exists quotes_updated_at on quotes;
 create trigger quotes_updated_at before update on quotes
   for each row execute procedure update_updated_at_column();
 
+drop trigger if exists orders_updated_at on orders;
 create trigger orders_updated_at before update on orders
   for each row execute procedure update_updated_at_column();
 
@@ -229,12 +233,23 @@ alter table files enable row level security;
 alter table tasks enable row level security;
 
 -- Allow all for now (replace with auth-scoped policies in production)
-create policy "allow_all_customers" on customers for all using (true) with check (true);
-create policy "allow_all_leads" on leads for all using (true) with check (true);
-create policy "allow_all_quotes" on quotes for all using (true) with check (true);
-create policy "allow_all_orders" on orders for all using (true) with check (true);
-create policy "allow_all_payments" on payments for all using (true) with check (true);
-create policy "allow_all_expenses" on expenses for all using (true) with check (true);
-create policy "allow_all_suppliers" on suppliers for all using (true) with check (true);
-create policy "allow_all_files" on files for all using (true) with check (true);
-create policy "allow_all_tasks" on tasks for all using (true) with check (true);
+do $$ begin
+  if not exists (select 1 from pg_policies where policyname = 'allow_all_customers' and tablename = 'customers') then
+    create policy "allow_all_customers" on customers for all using (true) with check (true); end if;
+  if not exists (select 1 from pg_policies where policyname = 'allow_all_leads' and tablename = 'leads') then
+    create policy "allow_all_leads" on leads for all using (true) with check (true); end if;
+  if not exists (select 1 from pg_policies where policyname = 'allow_all_quotes' and tablename = 'quotes') then
+    create policy "allow_all_quotes" on quotes for all using (true) with check (true); end if;
+  if not exists (select 1 from pg_policies where policyname = 'allow_all_orders' and tablename = 'orders') then
+    create policy "allow_all_orders" on orders for all using (true) with check (true); end if;
+  if not exists (select 1 from pg_policies where policyname = 'allow_all_payments' and tablename = 'payments') then
+    create policy "allow_all_payments" on payments for all using (true) with check (true); end if;
+  if not exists (select 1 from pg_policies where policyname = 'allow_all_expenses' and tablename = 'expenses') then
+    create policy "allow_all_expenses" on expenses for all using (true) with check (true); end if;
+  if not exists (select 1 from pg_policies where policyname = 'allow_all_suppliers' and tablename = 'suppliers') then
+    create policy "allow_all_suppliers" on suppliers for all using (true) with check (true); end if;
+  if not exists (select 1 from pg_policies where policyname = 'allow_all_files' and tablename = 'files') then
+    create policy "allow_all_files" on files for all using (true) with check (true); end if;
+  if not exists (select 1 from pg_policies where policyname = 'allow_all_tasks' and tablename = 'tasks') then
+    create policy "allow_all_tasks" on tasks for all using (true) with check (true); end if;
+end $$;
