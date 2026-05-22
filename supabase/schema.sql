@@ -253,3 +253,16 @@ do $$ begin
   if not exists (select 1 from pg_policies where policyname = 'allow_all_tasks' and tablename = 'tasks') then
     create policy "allow_all_tasks" on tasks for all using (true) with check (true); end if;
 end $$;
+
+-- Phase 1 workflow columns
+alter table leads add column if not exists original_message text;
+alter table leads add column if not exists gold_color text;
+alter table leads add column if not exists carat numeric;
+alter table leads add column if not exists ring_size text;
+alter table leads add column if not exists desired_style text;
+alter table leads add column if not exists instagram text;
+alter table leads add column if not exists email text;
+alter table customers add column if not exists total_purchases numeric default 0;
+alter table customers add column if not exists total_profit numeric default 0;
+alter table customers add column if not exists orders_count integer default 0;
+alter table quotes add column if not exists estimated_delivery_time text;

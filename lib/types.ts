@@ -8,6 +8,9 @@ export interface Customer {
   source?: string
   customer_status: string
   notes?: string
+  total_purchases?: number
+  total_profit?: number
+  orders_count?: number
   created_at: string
   updated_at: string
 }
@@ -36,6 +39,13 @@ export interface Lead {
   jewelry_type?: string
   diamond_type?: string
   gold_type?: string
+  gold_color?: string
+  carat?: number
+  ring_size?: string
+  desired_style?: string
+  original_message?: string
+  instagram?: string
+  email?: string
   budget?: number
   lead_status: string
   priority: string
@@ -44,6 +54,7 @@ export interface Lead {
   created_at: string
   updated_at: string
   customers?: Customer
+  quotes?: Quote[]
 }
 
 export interface Quote {

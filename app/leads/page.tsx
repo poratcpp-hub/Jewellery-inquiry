@@ -17,7 +17,8 @@ import { formatCurrency, formatDate, isOverdue, exportCsv } from '@/lib/utils'
 import { getLeads, upsertLead, deleteLead, getCustomers, upsertCustomer } from '@/lib/data'
 import { LEAD_STATUSES } from '@/lib/constants'
 import type { Lead, Customer } from '@/lib/types'
-import { Plus, Search, Pencil, Trash2, ArrowLeftRight, AlertTriangle, Download } from 'lucide-react'
+import Link from 'next/link'
+import { Plus, Search, Pencil, Trash2, ArrowLeftRight, AlertTriangle, Download, Eye } from 'lucide-react'
 
 export default function LeadsPage() {
   const { toast } = useToast()
@@ -227,6 +228,7 @@ export default function LeadsPage() {
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1">
+                          <Link href={`/leads/${lead.id}`}><Button variant="ghost" size="icon" title="פרטים"><Eye size={15} /></Button></Link>
                           <Button variant="ghost" size="icon" onClick={() => openEdit(lead)} title="עריכה"><Pencil size={15} /></Button>
                           {!['הומר', 'נסגר'].includes(lead.lead_status) && (
                             <Button variant="ghost" size="icon" onClick={() => convertToQuote(lead)} title="המר לטיפול" className="text-[#b8934a]">

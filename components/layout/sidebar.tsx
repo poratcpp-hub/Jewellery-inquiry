@@ -13,6 +13,7 @@ import {
   Truck,
   Settings,
   X,
+  Plus,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -30,9 +31,10 @@ const navItems = [
 interface SidebarProps {
   open?: boolean
   onClose?: () => void
+  onNewInquiry?: () => void
 }
 
-export function Sidebar({ open, onClose }: SidebarProps) {
+export function Sidebar({ open, onClose, onNewInquiry }: SidebarProps) {
   const pathname = usePathname()
 
   return (
@@ -74,6 +76,15 @@ export function Sidebar({ open, onClose }: SidebarProps) {
 
         {/* Navigation */}
         <nav className="flex-1 overflow-y-auto py-4 px-3">
+          {onNewInquiry && (
+            <button
+              onClick={() => { onNewInquiry(); onClose?.() }}
+              className="w-full flex items-center gap-2 px-3 py-3 mb-3 rounded-xl bg-[#b8934a] text-white font-semibold text-sm hover:bg-[#a07840] transition-colors shadow-sm"
+            >
+              <Plus size={18} className="shrink-0" />
+              פנייה חדשה
+            </button>
+          )}
           <ul className="space-y-1">
             {navItems.map((item) => {
               const Icon = item.icon

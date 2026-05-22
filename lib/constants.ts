@@ -1,6 +1,6 @@
 // Centralised Hebrew labels used across all pages
-export const CUSTOMER_STATUSES = ['חדש', 'פעיל', 'לא פעיל', 'VIP'] as const
-export const LEAD_STATUSES = ['חדש', 'בטיפול', 'ממתין', 'הומר', 'נסגר'] as const
+export const CUSTOMER_STATUSES = ['ליד חדש', 'חדש', 'פעיל', 'לקוח פעיל', 'לקוח חוזר', 'קנה', 'לא פעיל', 'VIP'] as const
+export const LEAD_STATUSES = ['חדש', 'צריך מענה ראשוני', 'מחכה לפרטים', 'מוכן להצעת מחיר', 'נשלחה הצעת מחיר', 'בטיפול', 'ממתין', 'הומר', 'נסגר להזמנה', 'נסגר'] as const
 export const LEAD_PRIORITIES = ['גבוה', 'בינוני', 'נמוך'] as const
 export const QUOTE_STATUSES = ['טיוטה', 'נשלחה', 'אושרה', 'נדחתה', 'פג תוקף'] as const
 export const ORDER_STATUSES = ['הזמנה חדשה', 'בייצור', 'מוכן', 'נמסר', 'בוטל'] as const

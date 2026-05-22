@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
-import { Menu, Bell, LogOut, User, ChevronDown } from 'lucide-react'
+import { Menu, Bell, LogOut, User, ChevronDown, Plus } from 'lucide-react'
 import { formatDate } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 
@@ -14,9 +14,10 @@ const IS_DEMO =
 interface TopbarProps {
   onMenuClick: () => void
   title?: string
+  onNewInquiry?: () => void
 }
 
-export function Topbar({ onMenuClick, title }: TopbarProps) {
+export function Topbar({ onMenuClick, title, onNewInquiry }: TopbarProps) {
   const today = formatDate(new Date().toISOString())
   const [userEmail, setUserEmail] = useState<string | null>(null)
   const [menuOpen, setMenuOpen] = useState(false)
@@ -62,6 +63,15 @@ export function Topbar({ onMenuClick, title }: TopbarProps) {
       </div>
 
       <div className="flex items-center gap-3 mr-auto">
+        {onNewInquiry && (
+          <button
+            onClick={onNewInquiry}
+            className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#b8934a] text-white text-sm font-medium hover:bg-[#a07840] transition-colors shadow-sm"
+          >
+            <Plus size={15} />
+            פנייה חדשה
+          </button>
+        )}
         {IS_DEMO && (
           <span className="hidden sm:inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700 border border-amber-200">
             Demo

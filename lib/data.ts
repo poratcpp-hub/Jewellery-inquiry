@@ -73,6 +73,51 @@ export async function deleteLead(id: string): Promise<void> {
   if (error) throw error
 }
 
+export async function getLead(id: string): Promise<Lead> {
+  if (IS_DEMO) {
+    const lead = demoLeads.find(l => l.id === id)
+    if (!lead) throw new Error('Not found')
+    const customer = demoCustomers.find(c => c.id === lead.customer_id)
+    const quotes = demoQuotes.filter(q => q.customer_id === lead.customer_id).map(q => ({ ...q, created_at: '', updated_at: '' }))
+    return { ...lead, created_at: '', updated_at: '', customers: customer ? { ...customer, created_at: '', updated_at: '' } : undefined, quotes } as Lead
+  }
+  const { data, error } = await supabase
+    .from('leads')
+    .select('*, customers(*), quotes(*)')
+    .eq('id', id)
+    .single()
+  if (error) throw error
+  return data as Lead
+}
+
+export async function findCustomerByContact(
+  phone?: string,
+  instagram?: string,
+  email?: string,
+): Promise<Customer | null> {
+  if (IS_DEMO) {
+    const c = demoCustomers.find(c =>
+      (phone && c.phone === phone) ||
+      (instagram && c.instagram === instagram) ||
+      (email && c.email === email)
+    )
+    return c ? { ...c, created_at: '', updated_at: '' } : null
+  }
+  if (phone) {
+    const { data } = await supabase.from('customers').select('*').eq('phone', phone).maybeSingle()
+    if (data) return data as Customer
+  }
+  if (instagram) {
+    const { data } = await supabase.from('customers').select('*').eq('instagram', instagram).maybeSingle()
+    if (data) return data as Customer
+  }
+  if (email) {
+    const { data } = await supabase.from('customers').select('*').eq('email', email).maybeSingle()
+    if (data) return data as Customer
+  }
+  return null
+}
+
 // ─── Quotes ──────────────────────────────────────────────────────────────────
 
 export async function getQuotes(): Promise<Quote[]> {
