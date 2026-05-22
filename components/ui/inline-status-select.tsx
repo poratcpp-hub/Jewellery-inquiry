@@ -12,35 +12,44 @@ interface InlineStatusSelectProps {
   disabled?: boolean
 }
 
+const MENU_HEIGHT_ESTIMATE = 240 // px — used to decide whether to open up or down
+
 export function InlineStatusSelect({ value, options, onChange, disabled }: InlineStatusSelectProps) {
   const [open, setOpen] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [pos, setPos] = useState({ top: 0, right: 0 })
+  const [pos, setPos] = useState({ top: 0, right: 0, openUp: false })
   const triggerRef = useRef<HTMLButtonElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
 
-  // Calculate portal position from trigger element
   const openMenu = () => {
     if (!triggerRef.current) return
     const rect = triggerRef.current.getBoundingClientRect()
+    const spaceBelow = window.innerHeight - rect.bottom
+    const openUp = spaceBelow < MENU_HEIGHT_ESTIMATE && rect.top > MENU_HEIGHT_ESTIMATE
     setPos({
-      top: rect.bottom + window.scrollY + 4,
+      top: openUp ? rect.top - 4 : rect.bottom + 4,
       right: window.innerWidth - rect.right,
+      openUp,
     })
     setOpen(true)
   }
 
-  // Close on outside click
+  // Close on outside click or scroll
   useEffect(() => {
     if (!open) return
-    const handler = (e: MouseEvent) => {
+    const close = (e: MouseEvent) => {
       if (
         triggerRef.current && !triggerRef.current.contains(e.target as Node) &&
         menuRef.current && !menuRef.current.contains(e.target as Node)
       ) setOpen(false)
     }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
+    const closeOnScroll = () => setOpen(false)
+    document.addEventListener('mousedown', close)
+    window.addEventListener('scroll', closeOnScroll, true)
+    return () => {
+      document.removeEventListener('mousedown', close)
+      window.removeEventListener('scroll', closeOnScroll, true)
+    }
   }, [open])
 
   const handleSelect = async (option: string) => {
@@ -57,7 +66,14 @@ export function InlineStatusSelect({ value, options, onChange, disabled }: Inlin
   const menu = open ? (
     <div
       ref={menuRef}
-      style={{ position: 'absolute', top: pos.top, right: pos.right, zIndex: 9999 }}
+      style={{
+        position: 'fixed',
+        zIndex: 9999,
+        right: pos.right,
+        ...(pos.openUp
+          ? { bottom: window.innerHeight - pos.top }
+          : { top: pos.top }),
+      }}
       className="bg-white rounded-xl border border-[#e5ddd0] shadow-xl py-1 min-w-[160px]"
     >
       {options.map(opt => (

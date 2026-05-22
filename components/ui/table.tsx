@@ -36,7 +36,7 @@ export function TableHead({ className, ...props }: React.ThHTMLAttributes<HTMLTa
   return (
     <th
       className={cn(
-        'h-10 px-4 text-right text-xs font-semibold text-[#7a6a52] uppercase tracking-wide align-middle bg-[#faf8f5]',
+        'h-11 px-4 text-right text-xs font-semibold text-[#7a6a52] uppercase tracking-wide align-middle bg-[#faf8f5] whitespace-nowrap',
         className
       )}
       {...props}
@@ -47,7 +47,7 @@ export function TableHead({ className, ...props }: React.ThHTMLAttributes<HTMLTa
 export function TableCell({ className, ...props }: React.TdHTMLAttributes<HTMLTableCellElement>) {
   return (
     <td
-      className={cn('px-4 py-3 text-sm text-[#2c1810] align-middle', className)}
+      className={cn('px-4 py-3.5 text-sm text-[#2c1810] align-middle', className)}
       {...props}
     />
   )
@@ -66,7 +66,7 @@ export function SortableHead({ children, sortKey, activeSortKey, sortDir, onSort
   return (
     <th
       className={cn(
-        'h-10 px-4 text-right text-xs font-semibold text-[#7a6a52] uppercase tracking-wide align-middle bg-[#faf8f5]',
+        'h-11 px-4 text-right text-xs font-semibold text-[#7a6a52] uppercase tracking-wide align-middle bg-[#faf8f5] whitespace-nowrap',
         sortKey && 'cursor-pointer select-none hover:text-[#2c1810]',
         className
       )}
