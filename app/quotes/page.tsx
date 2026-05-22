@@ -16,6 +16,7 @@ import { useDebounce, useTableSort } from '@/lib/hooks'
 import { formatCurrency, formatDate, getProfitColor, exportCsv } from '@/lib/utils'
 import { getQuotes, upsertQuote, deleteQuote, getCustomers } from '@/lib/data'
 import { QUOTE_STATUSES } from '@/lib/constants'
+import { InlineStatusSelect } from '@/components/ui/inline-status-select'
 import type { Quote, Customer } from '@/lib/types'
 import Link from 'next/link'
 import { Plus, Search, Pencil, Trash2, Download, Eye } from 'lucide-react'
@@ -75,6 +76,15 @@ export default function QuotesPage() {
     }
     setEditing(undefined)
   }, [editing, customers, toast])
+
+  const handleStatusChange = useCallback(async (quote: Quote, newStatus: string) => {
+    try {
+      await upsertQuote({ id: quote.id, quote_status: newStatus, quote_number: quote.quote_number, diamond_cost: quote.diamond_cost, gold_cost: quote.gold_cost, labor_cost: quote.labor_cost, setting_cost: quote.setting_cost, packaging_cost: quote.packaging_cost, shipping_cost: quote.shipping_cost, other_cost: quote.other_cost, total_cost: quote.total_cost, sale_price: quote.sale_price, expected_profit: quote.expected_profit, profit_margin: quote.profit_margin })
+      setQuotes(prev => prev.map(q => q.id === quote.id ? { ...q, quote_status: newStatus } : q))
+    } catch {
+      toast({ type: 'error', title: 'שגיאה בעדכון סטטוס' })
+    }
+  }, [toast])
 
   const handleDelete = useCallback(async () => {
     if (!deleteTarget) return
@@ -171,7 +181,9 @@ export default function QuotesPage() {
                         {quote.profit_margin.toFixed(1)}%
                       </span>
                     </TableCell>
-                    <TableCell><Badge variant={getStatusBadgeVariant(quote.quote_status)}>{quote.quote_status}</Badge></TableCell>
+                    <TableCell>
+                      <InlineStatusSelect value={quote.quote_status} options={QUOTE_STATUSES} onChange={s => handleStatusChange(quote, s)} />
+                    </TableCell>
                     <TableCell className="hidden lg:table-cell text-[#7a6a52] text-sm">{formatDate(quote.valid_until)}</TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1">

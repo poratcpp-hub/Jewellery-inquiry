@@ -6,7 +6,6 @@ import { PageHeader } from '@/components/layout/page-header'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
-import { Badge, getStatusBadgeVariant } from '@/components/ui/badge'
 import { Table, TableHeader, TableBody, TableRow, SortableHead, TableCell } from '@/components/ui/table'
 import { LeadForm } from '@/components/leads/lead-form'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
@@ -15,7 +14,8 @@ import { useToast } from '@/components/ui/toast'
 import { useDebounce, useTableSort } from '@/lib/hooks'
 import { formatCurrency, formatDate, isOverdue, exportCsv } from '@/lib/utils'
 import { getLeads, upsertLead, deleteLead, getCustomers } from '@/lib/data'
-import { LEAD_STATUSES, CLOSED_LEAD_STATUSES } from '@/lib/constants'
+import { LEAD_STATUSES, LEAD_PRIORITIES, CLOSED_LEAD_STATUSES } from '@/lib/constants'
+import { InlineStatusSelect } from '@/components/ui/inline-status-select'
 import type { Lead, Customer } from '@/lib/types'
 import Link from 'next/link'
 import { Plus, Search, Pencil, Trash2, AlertTriangle, Download, Eye } from 'lucide-react'
@@ -86,6 +86,24 @@ export default function LeadsPage() {
     }
     setEditing(undefined)
   }, [editing, customers, leads, toast])
+
+  const handleStatusChange = useCallback(async (lead: Lead, newStatus: string) => {
+    try {
+      await upsertLead({ id: lead.id, lead_status: newStatus })
+      setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, lead_status: newStatus } : l))
+    } catch {
+      toast({ type: 'error', title: 'שגיאה בעדכון סטטוס' })
+    }
+  }, [toast])
+
+  const handlePriorityChange = useCallback(async (lead: Lead, newPriority: string) => {
+    try {
+      await upsertLead({ id: lead.id, priority: newPriority })
+      setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, priority: newPriority } : l))
+    } catch {
+      toast({ type: 'error', title: 'שגיאה בעדכון עדיפות' })
+    }
+  }, [toast])
 
   const handleDelete = useCallback(async () => {
     if (!deleteTarget) return
@@ -178,10 +196,10 @@ export default function LeadsPage() {
                         {lead.budget && <div className="text-xs text-[#7a6a52]">{formatCurrency(lead.budget)}</div>}
                       </TableCell>
                       <TableCell>
-                        <Badge variant={getStatusBadgeVariant(lead.lead_status)}>{lead.lead_status}</Badge>
+                        <InlineStatusSelect value={lead.lead_status} options={LEAD_STATUSES} onChange={s => handleStatusChange(lead, s)} />
                       </TableCell>
                       <TableCell>
-                        <Badge variant={getStatusBadgeVariant(lead.priority)}>{lead.priority}</Badge>
+                        <InlineStatusSelect value={lead.priority} options={LEAD_PRIORITIES} onChange={s => handlePriorityChange(lead, s)} />
                       </TableCell>
                       <TableCell className="hidden md:table-cell">
                         {lead.follow_up_date ? (

@@ -14,6 +14,8 @@ import { useToast } from '@/components/ui/toast'
 import { useDebounce, useTableSort } from '@/lib/hooks'
 import { formatDate, exportCsv } from '@/lib/utils'
 import { getCustomers, upsertCustomer, deleteCustomer } from '@/lib/data'
+import { CUSTOMER_STATUSES } from '@/lib/constants'
+import { InlineStatusSelect } from '@/components/ui/inline-status-select'
 import type { Customer } from '@/lib/types'
 import Link from 'next/link'
 import { Plus, Search, Pencil, Trash2, Phone, AtSign, Download, Eye } from 'lucide-react'
@@ -97,6 +99,15 @@ export default function CustomersPage() {
     toast({ type: 'success', title: `הלקוח "${saved.full_name}" נוסף` })
     setEditing(undefined)
   }, [editing, customers, toast])
+
+  const handleStatusChange = useCallback(async (customer: Customer, newStatus: string) => {
+    try {
+      await upsertCustomer({ id: customer.id, customer_status: newStatus, full_name: customer.full_name })
+      setCustomers(prev => prev.map(c => c.id === customer.id ? { ...c, customer_status: newStatus } : c))
+    } catch {
+      toast({ type: 'error', title: 'שגיאה בעדכון סטטוס' })
+    }
+  }, [toast])
 
   const handleDelete = useCallback(async () => {
     if (!deleteTarget) return
@@ -194,7 +205,7 @@ export default function CustomersPage() {
                     <TableCell className="hidden md:table-cell text-sm">{customer.city || '—'}</TableCell>
                     <TableCell className="hidden md:table-cell text-sm text-[#7a6a52]">{customer.source || '—'}</TableCell>
                     <TableCell>
-                      <Badge variant={getStatusBadgeVariant(customer.customer_status)}>{customer.customer_status}</Badge>
+                      <InlineStatusSelect value={customer.customer_status} options={CUSTOMER_STATUSES} onChange={s => handleStatusChange(customer, s)} />
                     </TableCell>
                     <TableCell className="hidden lg:table-cell text-[#7a6a52] text-sm">{formatDate(customer.created_at)}</TableCell>
                     <TableCell>

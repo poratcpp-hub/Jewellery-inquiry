@@ -62,7 +62,8 @@ export async function getLeads(): Promise<Lead[]> {
 
 export async function upsertLead(lead: Partial<Lead>): Promise<Lead> {
   if (IS_DEMO) return { ...lead, id: lead.id || crypto.randomUUID(), lead_status: lead.lead_status || 'חדש', priority: lead.priority || 'בינוני', created_at: '', updated_at: '' } as Lead
-  const { data, error } = await supabase.from('leads').upsert(lead).select().single()
+  const sanitized = { ...lead, customer_id: lead.customer_id || null, quote_id: lead.quote_id || null, order_id: lead.order_id || null }
+  const { data, error } = await supabase.from('leads').upsert(sanitized).select().single()
   if (error) throw error
   return data as Lead
 }
@@ -131,8 +132,9 @@ export async function getQuotes(): Promise<Quote[]> {
 }
 
 export async function upsertQuote(quote: Partial<Quote>): Promise<Quote> {
-  if (IS_DEMO) return { ...quote, id: quote.id || crypto.randomUUID(), quote_status: 'טיוטה', diamond_cost: 0, gold_cost: 0, labor_cost: 0, setting_cost: 0, packaging_cost: 0, shipping_cost: 0, other_cost: 0, total_cost: 0, sale_price: 0, expected_profit: 0, profit_margin: 0, created_at: '', updated_at: '' } as Quote
-  const { data, error } = await supabase.from('quotes').upsert(quote).select().single()
+  if (IS_DEMO) return { ...quote, id: quote.id || crypto.randomUUID(), quote_status: quote.quote_status || 'טיוטה', diamond_cost: quote.diamond_cost ?? 0, gold_cost: quote.gold_cost ?? 0, labor_cost: quote.labor_cost ?? 0, setting_cost: quote.setting_cost ?? 0, packaging_cost: quote.packaging_cost ?? 0, shipping_cost: quote.shipping_cost ?? 0, other_cost: quote.other_cost ?? 0, total_cost: quote.total_cost ?? 0, sale_price: quote.sale_price ?? 0, expected_profit: quote.expected_profit ?? 0, profit_margin: quote.profit_margin ?? 0, created_at: '', updated_at: '' } as Quote
+  const sanitized = { ...quote, customer_id: quote.customer_id || null, lead_id: quote.lead_id || null, order_id: quote.order_id || null }
+  const { data, error } = await supabase.from('quotes').upsert(sanitized).select().single()
   if (error) throw error
   return data as Quote
 }
@@ -157,7 +159,8 @@ export async function getOrders(): Promise<Order[]> {
 
 export async function upsertOrder(order: Partial<Order>): Promise<Order> {
   if (IS_DEMO) return { ...order, id: order.id || crypto.randomUUID(), order_status: order.order_status || 'מחכה למקדמה', payment_status: order.payment_status || 'לא שולם', sale_price: order.sale_price ?? 0, deposit_amount: order.deposit_amount ?? 0, balance_due: order.balance_due ?? 0, total_cost: order.total_cost ?? 0, net_profit: order.net_profit ?? 0, profit_margin: order.profit_margin ?? 0, created_at: '', updated_at: '' } as Order
-  const { data, error } = await supabase.from('orders').upsert(order).select().single()
+  const sanitized = { ...order, customer_id: order.customer_id || null, supplier_id: order.supplier_id || null, quote_id: order.quote_id || null, lead_id: order.lead_id || null }
+  const { data, error } = await supabase.from('orders').upsert(sanitized).select().single()
   if (error) throw error
   return data as Order
 }

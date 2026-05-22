@@ -6,7 +6,6 @@ import { PageHeader } from '@/components/layout/page-header'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
-import { Badge, getStatusBadgeVariant } from '@/components/ui/badge'
 import { Table, TableHeader, TableBody, TableRow, SortableHead, TableCell } from '@/components/ui/table'
 import { OrderForm } from '@/components/orders/order-form'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
@@ -15,7 +14,8 @@ import { useToast } from '@/components/ui/toast'
 import { useDebounce, useTableSort } from '@/lib/hooks'
 import { formatCurrency, formatDate, daysUntil, exportCsv } from '@/lib/utils'
 import { getOrders, upsertOrder, deleteOrder, getCustomers, getSuppliers } from '@/lib/data'
-import { ORDER_STATUSES, CLOSED_ORDER_STATUSES } from '@/lib/constants'
+import { ORDER_STATUSES, PAYMENT_STATUSES, CLOSED_ORDER_STATUSES } from '@/lib/constants'
+import { InlineStatusSelect } from '@/components/ui/inline-status-select'
 import type { Order, Customer, Supplier } from '@/lib/types'
 import Link from 'next/link'
 import { Plus, Search, Pencil, Trash2, AlertTriangle, Download, Eye } from 'lucide-react'
@@ -90,6 +90,24 @@ export default function OrdersPage() {
     }
     setEditing(undefined)
   }, [editing, enrich, toast])
+
+  const handleStatusChange = useCallback(async (order: Order, newStatus: string) => {
+    try {
+      await upsertOrder({ id: order.id, order_status: newStatus, customer_id: order.customer_id })
+      setOrders(prev => prev.map(o => o.id === order.id ? { ...o, order_status: newStatus } : o))
+    } catch {
+      toast({ type: 'error', title: 'שגיאה בעדכון סטטוס' })
+    }
+  }, [toast])
+
+  const handlePaymentStatusChange = useCallback(async (order: Order, newStatus: string) => {
+    try {
+      await upsertOrder({ id: order.id, payment_status: newStatus, customer_id: order.customer_id })
+      setOrders(prev => prev.map(o => o.id === order.id ? { ...o, payment_status: newStatus } : o))
+    } catch {
+      toast({ type: 'error', title: 'שגיאה בעדכון סטטוס תשלום' })
+    }
+  }, [toast])
 
   const handleDelete = useCallback(async () => {
     if (!deleteTarget) return
@@ -183,8 +201,12 @@ export default function OrdersPage() {
                       <TableCell className="hidden md:table-cell text-[#7a6a52] text-sm">
                         {order.jewelry_type || '—'}{order.gold_type && <span className="text-xs"> · {order.gold_type}</span>}
                       </TableCell>
-                      <TableCell><Badge variant={getStatusBadgeVariant(order.order_status)}>{order.order_status}</Badge></TableCell>
-                      <TableCell className="hidden sm:table-cell"><Badge variant={getStatusBadgeVariant(order.payment_status)}>{order.payment_status}</Badge></TableCell>
+                      <TableCell>
+                        <InlineStatusSelect value={order.order_status} options={ORDER_STATUSES} onChange={s => handleStatusChange(order, s)} />
+                      </TableCell>
+                      <TableCell className="hidden sm:table-cell">
+                        <InlineStatusSelect value={order.payment_status} options={PAYMENT_STATUSES} onChange={s => handlePaymentStatusChange(order, s)} />
+                      </TableCell>
                       <TableCell className="font-semibold text-[#2c1810]">{formatCurrency(order.sale_price)}</TableCell>
                       <TableCell className="hidden lg:table-cell">
                         {order.balance_due > 0
