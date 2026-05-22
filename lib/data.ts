@@ -37,8 +37,27 @@ export async function getCustomers(): Promise<Customer[]> {
 
 export async function upsertCustomer(customer: Partial<Customer>): Promise<Customer> {
   if (IS_DEMO) return { ...customer, id: customer.id || crypto.randomUUID(), created_at: '', updated_at: '' } as Customer
-  const { data, error } = await supabase.from('customers').upsert(customer).select().single()
-  if (error) throw error
+  const { orders: _orders, converted_leads: _leads, ...rest } = customer as Customer & { orders?: unknown; converted_leads?: unknown }
+  const payload: Record<string, unknown> = {
+    full_name: rest.full_name,
+    phone: rest.phone || null,
+    instagram: rest.instagram || null,
+    email: rest.email || null,
+    city: rest.city || null,
+    source: rest.source || null,
+    customer_status: rest.customer_status || 'לקוח חדש',
+    notes: rest.notes || null,
+  }
+  Object.keys(payload).forEach(k => payload[k] === undefined && delete payload[k])
+  if (rest.id) payload.id = rest.id
+  if (rest.orders_count !== undefined) payload.orders_count = rest.orders_count
+  if (rest.total_revenue !== undefined) payload.total_revenue = rest.total_revenue
+  if (rest.total_profit !== undefined) payload.total_profit = rest.total_profit
+  if (rest.average_order_value !== undefined) payload.average_order_value = rest.average_order_value
+  if (rest.first_order_date !== undefined) payload.first_order_date = rest.first_order_date || null
+  if (rest.last_order_date !== undefined) payload.last_order_date = rest.last_order_date || null
+  const { data, error } = await supabase.from('customers').upsert(payload).select().single()
+  if (error) { console.error('[upsertCustomer] Supabase error:', error); throw error }
   return data as Customer
 }
 
@@ -378,24 +397,14 @@ export async function getCustomerFull(id: string): Promise<Customer> {
   if (IS_DEMO) {
     const c = demoCustomers.find(c => c.id === id)
     if (!c) throw new Error('Customer not found')
-    // Only show leads that converted to orders
     const convertedLeads = demoLeads.filter(l => l.customer_id === c.id && l.order_id).map(l => ({ ...l, created_at: '', updated_at: '' }))
     const orders = demoOrders.filter(o => o.customer_id === c.id).map(o => ({ ...o, created_at: '', updated_at: '' }))
     return { ...c, created_at: '', updated_at: '', converted_leads: convertedLeads, orders }
   }
-  const { data, error } = await supabase
-    .from('customers')
-    .select('*, orders(*), converted_leads:leads!inner(customer_id, order_id)')
-    .eq('id', id)
-    .single()
-  if (error) {
-    // fallback without inner join
-    const { data: d2, error: e2 } = await supabase.from('customers').select('*, orders(*)').eq('id', id).single()
-    if (e2) throw e2
-    const { data: leads } = await supabase.from('leads').select('*').eq('customer_id', id).not('order_id', 'is', null)
-    return { ...(d2 as Customer), converted_leads: (leads || []) as Lead[] }
-  }
-  return data as Customer
+  const { data, error } = await supabase.from('customers').select('*, orders(*)').eq('id', id).single()
+  if (error) throw error
+  const { data: leads } = await supabase.from('leads').select('*').eq('customer_id', id).not('order_id', 'is', null)
+  return { ...(data as Customer), converted_leads: (leads || []) as Lead[] }
 }
 
 // ─── Tasks ────────────────────────────────────────────────────────────────────

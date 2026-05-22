@@ -147,8 +147,22 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    Promise.all([getPayments(), getExpenses(), getLeads(), getQuotes(), getOrders(), getCustomers()])
-      .then(([payments, expenses, leads, quotes, orders, customers]) => {
+    Promise.allSettled([getPayments(), getExpenses(), getLeads(), getQuotes(), getOrders(), getCustomers()])
+      .then(([paymentsR, expensesR, leadsR, quotesR, ordersR, customersR]) => {
+        const payments = paymentsR.status === 'fulfilled' ? paymentsR.value : []
+        const expenses = expensesR.status === 'fulfilled' ? expensesR.value : []
+        const leads = leadsR.status === 'fulfilled' ? leadsR.value : []
+        const quotes = quotesR.status === 'fulfilled' ? quotesR.value : []
+        const orders = ordersR.status === 'fulfilled' ? ordersR.value : []
+        const customers = customersR.status === 'fulfilled' ? customersR.value : []
+
+        const anyFailed = [paymentsR, expensesR, leadsR, quotesR, ordersR, customersR].some(r => r.status === 'rejected')
+        if (anyFailed) {
+          const firstError = [paymentsR, expensesR, leadsR, quotesR, ordersR, customersR].find(r => r.status === 'rejected') as PromiseRejectedResult
+          console.error('[Dashboard] Supabase error:', firstError?.reason)
+          toast({ type: 'error', title: 'שגיאה בטעינת הדשבורד', description: 'בדוק שהסכמה הורצה ב-Supabase' })
+        }
+
         const now = new Date()
         const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
         const twoWeeks = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000)
@@ -197,7 +211,6 @@ export default function DashboardPage() {
           })
         )
       })
-      .catch(() => toast({ type: 'error', title: 'שגיאה בטעינת הדשבורד' }))
       .finally(() => setLoading(false))
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
