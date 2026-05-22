@@ -486,10 +486,10 @@ export async function refreshCustomerStats(customerId: string): Promise<Customer
     .neq('order_status', 'בוטל')
   if (oErr) throw oErr
 
-  const validOrders = orders || []
+  const validOrders: { sale_price: number; net_profit: number | null; created_at?: string }[] = orders || []
   const ordersCount = validOrders.length
   const totalRevenue = validOrders.reduce((s, o) => s + o.sale_price, 0)
-  const totalProfit = validOrders.reduce((s, o) => s + o.net_profit, 0)
+  const totalProfit = validOrders.reduce((s, o) => s + (o.net_profit ?? 0), 0)
   const avgOrderValue = ordersCount > 0 ? totalRevenue / ordersCount : 0
   const dates = validOrders.map(o => o.created_at).sort()
   let status = 'לקוח חדש'

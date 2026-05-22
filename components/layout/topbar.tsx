@@ -39,7 +39,7 @@ export function Topbar({ onMenuClick, title, onNewInquiry }: TopbarProps) {
   useEffect(() => {
     if (IS_DEMO) return
     const supabase = createClient()
-    supabase.auth.getUser().then(({ data }) => setUserEmail(data.user?.email ?? null))
+    supabase.auth.getUser().then(({ data }: { data: { user: { email?: string } | null } }) => setUserEmail(data.user?.email ?? null))
   }, [])
 
   useEffect(() => {
