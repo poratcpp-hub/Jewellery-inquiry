@@ -13,7 +13,7 @@ import { TableSkeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
 import { useDebounce, useTableSort } from '@/lib/hooks'
 import { formatCurrency, formatDate, daysUntil, exportCsv } from '@/lib/utils'
-import { getOrders, upsertOrder, deleteOrder, getCustomers, getSuppliers } from '@/lib/data'
+import { getOrders, upsertOrder, deleteOrder, getCustomers, getSuppliers, refreshCustomerStats } from '@/lib/data'
 import { ORDER_STATUSES, PAYMENT_STATUSES, CLOSED_ORDER_STATUSES } from '@/lib/constants'
 import { InlineStatusSelect } from '@/components/ui/inline-status-select'
 import type { Order, Customer, Supplier } from '@/lib/types'
@@ -85,7 +85,12 @@ export default function OrdersPage() {
         setOrders(prev => [{ ...enriched, id: enriched.id || Math.random().toString(36).slice(2) } as Order, ...prev])
         toast({ type: 'success', title: 'הזמנה חדשה נוצרה' })
       }
-    } catch {
+      // Fire-and-forget: refresh customer stats after save
+      if (saved.customer_id) {
+        refreshCustomerStats(saved.customer_id).catch(() => {})
+      }
+    } catch (err) {
+      console.error('[handleSave] Error saving order:', err)
       toast({ type: 'error', title: 'שגיאה בשמירת ההזמנה' })
     }
     setEditing(undefined)
@@ -93,7 +98,7 @@ export default function OrdersPage() {
 
   const handleStatusChange = useCallback(async (order: Order, newStatus: string) => {
     try {
-      await upsertOrder({ id: order.id, order_status: newStatus, customer_id: order.customer_id })
+      await upsertOrder({ id: order.id, order_status: newStatus, customer_id: order.customer_id || undefined })
       setOrders(prev => prev.map(o => o.id === order.id ? { ...o, order_status: newStatus } : o))
     } catch {
       toast({ type: 'error', title: 'שגיאה בעדכון סטטוס' })
@@ -102,7 +107,7 @@ export default function OrdersPage() {
 
   const handlePaymentStatusChange = useCallback(async (order: Order, newStatus: string) => {
     try {
-      await upsertOrder({ id: order.id, payment_status: newStatus, customer_id: order.customer_id })
+      await upsertOrder({ id: order.id, payment_status: newStatus, customer_id: order.customer_id || undefined })
       setOrders(prev => prev.map(o => o.id === order.id ? { ...o, payment_status: newStatus } : o))
     } catch {
       toast({ type: 'error', title: 'שגיאה בעדכון סטטוס תשלום' })
