@@ -86,7 +86,7 @@ export async function getQuotes(): Promise<Quote[]> {
 }
 
 export async function upsertQuote(quote: Partial<Quote>): Promise<Quote> {
-  if (IS_DEMO) return { ...quote, id: quote.id || crypto.randomUUID(), quote_status: 'טיוטה', has_certificate: false, diamond_cost: 0, gold_cost: 0, labor_cost: 0, setting_cost: 0, packaging_cost: 0, shipping_cost: 0, other_cost: 0, total_cost: 0, sale_price: 0, expected_profit: 0, profit_margin: 0, created_at: '', updated_at: '' } as Quote
+  if (IS_DEMO) return { ...quote, id: quote.id || crypto.randomUUID(), quote_status: 'טיוטה', diamond_cost: 0, gold_cost: 0, labor_cost: 0, setting_cost: 0, packaging_cost: 0, shipping_cost: 0, other_cost: 0, total_cost: 0, sale_price: 0, expected_profit: 0, profit_margin: 0, created_at: '', updated_at: '' } as Quote
   const { data, error } = await supabase.from('quotes').upsert(quote).select().single()
   if (error) throw error
   return data as Quote

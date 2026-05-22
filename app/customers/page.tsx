@@ -70,6 +70,13 @@ export default function CustomersPage() {
 
   const handleSave = useCallback(async (data: Partial<Customer>) => {
     try {
+      if (!editing && data.phone) {
+        const dup = customers.find(c => c.phone === data.phone)
+        if (dup) {
+          toast({ type: 'error', title: 'כפילות', description: `כבר קיים לקוח עם מספר זה: "${dup.full_name}"` })
+          return
+        }
+      }
       const saved = await upsertCustomer(editing ? { ...editing, ...data } : data)
       if (editing) {
         setCustomers(prev => prev.map(c => c.id === editing.id ? saved : c))
@@ -82,7 +89,7 @@ export default function CustomersPage() {
       toast({ type: 'error', title: 'שגיאה בשמירת הלקוח' })
     }
     setEditing(undefined)
-  }, [editing, toast])
+  }, [editing, customers, toast])
 
   const handleDelete = useCallback(async () => {
     if (!deleteTarget) return

@@ -14,7 +14,7 @@ import { TableSkeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
 import { useDebounce, useTableSort } from '@/lib/hooks'
 import { formatCurrency, formatDate, getProfitColor, exportCsv } from '@/lib/utils'
-import { getQuotes, upsertQuote, deleteQuote, getCustomers } from '@/lib/data'
+import { getQuotes, upsertQuote, deleteQuote, getCustomers, upsertCustomer } from '@/lib/data'
 import { QUOTE_STATUSES } from '@/lib/constants'
 import type { Quote, Customer } from '@/lib/types'
 import { Plus, Search, Pencil, Trash2, ArrowLeftRight, Download } from 'lucide-react'
@@ -91,7 +91,11 @@ export default function QuotesPage() {
     try {
       await upsertQuote({ ...quote, quote_status: 'אושרה' })
       setQuotes(prev => prev.map(q => q.id === quote.id ? { ...q, quote_status: 'אושרה' } : q))
-      toast({ type: 'success', title: 'הצעה אושרה', description: 'כעת ניתן ליצור הזמנה' })
+      if (quote.customer_id) {
+        await upsertCustomer({ id: quote.customer_id, customer_status: 'פעיל' })
+        setCustomers(prev => prev.map(c => c.id === quote.customer_id ? { ...c, customer_status: 'פעיל' } : c))
+      }
+      toast({ type: 'success', title: 'הצעה אושרה', description: 'הלקוח סומן כפעיל. כעת ניתן ליצור הזמנה' })
     } catch {
       toast({ type: 'error', title: 'שגיאה בהמרה' })
     }

@@ -14,7 +14,7 @@ import { TableSkeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
 import { useDebounce, useTableSort } from '@/lib/hooks'
 import { formatCurrency, formatDate, isOverdue, exportCsv } from '@/lib/utils'
-import { getLeads, upsertLead, deleteLead, getCustomers } from '@/lib/data'
+import { getLeads, upsertLead, deleteLead, getCustomers, upsertCustomer } from '@/lib/data'
 import { LEAD_STATUSES } from '@/lib/constants'
 import type { Lead, Customer } from '@/lib/types'
 import { Plus, Search, Pencil, Trash2, ArrowLeftRight, AlertTriangle, Download } from 'lucide-react'
@@ -56,6 +56,13 @@ export default function LeadsPage() {
 
   const handleSave = useCallback(async (data: Partial<Lead>) => {
     try {
+      if (!editing && data.phone) {
+        const dup = leads.find(l => l.phone === data.phone)
+        if (dup) {
+          toast({ type: 'error', title: 'כפילות', description: `כבר קיים ליד עם מספר זה: "${dup.full_name}"` })
+          return
+        }
+      }
       const saved = await upsertLead(editing ? { ...editing, ...data } : data)
       const withCustomer = { ...saved, customers: customers.find(c => c.id === saved.customer_id) }
       if (editing) {
@@ -69,7 +76,7 @@ export default function LeadsPage() {
       toast({ type: 'error', title: 'שגיאה בשמירת הליד' })
     }
     setEditing(undefined)
-  }, [editing, customers, toast])
+  }, [editing, customers, leads, toast])
 
   const handleDelete = useCallback(async () => {
     if (!deleteTarget) return
@@ -85,13 +92,35 @@ export default function LeadsPage() {
 
   const convertToQuote = useCallback(async (lead: Lead) => {
     try {
-      await upsertLead({ ...lead, lead_status: 'הומר' })
-      setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, lead_status: 'הומר' } : l))
-      toast({ type: 'success', title: 'הליד הומר לטיפול', description: 'ניתן כעת ליצור הצעת מחיר' })
+      let customerId = lead.customer_id
+      if (!customerId) {
+        const byPhone = lead.phone ? customers.find(c => c.phone === lead.phone) : undefined
+        const byName = !byPhone
+          ? customers.find(c => c.full_name.toLowerCase() === (lead.full_name || '').toLowerCase())
+          : undefined
+        const existing = byPhone || byName
+        if (existing) {
+          customerId = existing.id
+          toast({ type: 'success', title: 'קושר ללקוח קיים', description: `"${existing.full_name}"` })
+        } else {
+          const newCustomer = await upsertCustomer({
+            full_name: lead.full_name || '',
+            phone: lead.phone,
+            source: lead.source,
+            customer_status: 'חדש',
+          })
+          customerId = newCustomer.id
+          setCustomers(prev => [newCustomer, ...prev])
+          toast({ type: 'success', title: 'לקוח חדש נוצר', description: `"${newCustomer.full_name}" נוסף ללקוחות` })
+        }
+      }
+      await upsertLead({ ...lead, lead_status: 'הומר', customer_id: customerId })
+      setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, lead_status: 'הומר', customer_id: customerId } : l))
+      toast({ type: 'success', title: 'הליד הומר', description: 'ניתן כעת ליצור הצעת מחיר' })
     } catch {
       toast({ type: 'error', title: 'שגיאה בהמרת הליד' })
     }
-  }, [toast])
+  }, [customers, toast])
 
   const handleExport = useCallback(() => {
     exportCsv('leads', sorted.map(l => ({
