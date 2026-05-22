@@ -68,6 +68,7 @@ export function getMissingDetails(lead: Partial<Lead>): MissingField[] {
 }
 
 export function getAutoLeadStatus(lead: Partial<Lead>): string {
+  if (lead.order_id) return 'נסגר להזמנה'
   if (!lead.jewelry_type && !lead.original_message) return 'צריך מענה ראשוני'
   const missing = getMissingDetails(lead)
   if (missing.length === 0) return 'מוכן להצעת מחיר'
@@ -105,6 +106,10 @@ export function getNextAction(lead: Partial<Lead>): {
   action: 'reply' | 'fill_details' | 'create_quote' | 'follow_up' | 'done'
 } {
   const status = lead.lead_status ?? ''
+
+  if (status === 'נסגר להזמנה') return { title: 'הליד הומר להזמנה', description: '', action: 'done' }
+  if (status === 'לא רלוונטי') return { title: 'ליד לא רלוונטי', description: '', action: 'done' }
+
   if (!lead.jewelry_type && !lead.original_message)
     return { title: 'צריך מענה ראשוני', description: 'שלח הודעה ראשונית ללקוח', action: 'reply' }
 
@@ -112,13 +117,13 @@ export function getNextAction(lead: Partial<Lead>): {
   if (missing.length > 0)
     return { title: 'חסרים פרטים', description: `${missing.length} פרטים חסרים להצעת מחיר`, action: 'fill_details' }
 
-  if (status === 'מוכן להצעת מחיר' || status === 'בטיפול' || status === 'חדש' || status === 'ממתין')
-    return { title: 'מוכן להצעת מחיר', description: 'כל הפרטים קיימים — הכן הצעת מחיר', action: 'create_quote' }
+  if (lead.quote_id && (status === 'נשלחה הצעת מחיר' || status === 'פולואפ ראשון' || status === 'פולואפ שני'))
+    return { title: 'מחכה לאישור הצעה', description: 'ההצעה נשלחה — בצע פולואפ', action: 'follow_up' }
 
-  if (status === 'נשלחה הצעת מחיר')
-    return { title: 'מחכה לתגובה', description: 'ההצעה נשלחה — בצע פולואפ', action: 'follow_up' }
+  if (lead.quote_id && status !== 'נסגר להזמנה')
+    return { title: 'הצעת מחיר בטיוטה', description: 'השלם מחיר ושלח ללקוח', action: 'follow_up' }
 
-  return { title: 'הליד סגור', description: '', action: 'done' }
+  return { title: 'מוכן להצעת מחיר', description: 'כל הפרטים קיימים — צור הצעת מחיר', action: 'create_quote' }
 }
 
 export function generateQuoteMessage(quote: Partial<Quote>, customerName?: string): string {

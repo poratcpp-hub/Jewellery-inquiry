@@ -51,7 +51,7 @@ export function Topbar({ onMenuClick, title, onNewInquiry }: TopbarProps) {
       const newAlerts: Alert[] = []
 
       leads.forEach(l => {
-        if (!l.follow_up_date || ['הומר', 'נסגר'].includes(l.lead_status)) return
+        if (!l.follow_up_date || l.lead_status === 'נסגר להזמנה' || l.lead_status === 'לא רלוונטי') return
         const d = new Date(l.follow_up_date)
         d.setHours(0, 0, 0, 0)
         if (d <= today) {
@@ -66,7 +66,7 @@ export function Topbar({ onMenuClick, title, onNewInquiry }: TopbarProps) {
       })
 
       quotes.forEach(q => {
-        if (!q.valid_until || q.quote_status !== 'נשלחה') return
+        if (!q.valid_until || q.quote_status !== 'נשלחה ללקוח') return
         const d = new Date(q.valid_until)
         d.setHours(0, 0, 0, 0)
         if (d >= today && d <= in7Days) {
@@ -130,7 +130,7 @@ export function Topbar({ onMenuClick, title, onNewInquiry }: TopbarProps) {
             className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#b8934a] text-white text-sm font-medium hover:bg-[#a07840] transition-colors shadow-sm"
           >
             <Plus size={15} />
-            פנייה חדשה
+            + ליד חדש
           </button>
         )}
         {IS_DEMO && (

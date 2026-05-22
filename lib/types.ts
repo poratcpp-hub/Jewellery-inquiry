@@ -8,14 +8,18 @@ export interface Customer {
   source?: string
   customer_status: string
   notes?: string
-  total_purchases?: number
-  total_profit?: number
+  // Calculated from orders
   orders_count?: number
+  total_revenue?: number
+  total_profit?: number
+  average_order_value?: number
+  first_order_date?: string
+  last_order_date?: string
   created_at: string
   updated_at: string
-  leads?: Lead[]
-  quotes?: Quote[]
+  // Relations
   orders?: Order[]
+  converted_leads?: Lead[]
 }
 
 export interface Supplier {
@@ -35,9 +39,13 @@ export interface Supplier {
 
 export interface Lead {
   id: string
-  customer_id?: string
+  customer_id?: string   // nullable — set only after order is created
+  quote_id?: string      // nullable — set when quote is created from lead
+  order_id?: string      // nullable — set when quote converts to order
   full_name?: string
   phone?: string
+  instagram?: string
+  email?: string
   source?: string
   jewelry_type?: string
   diamond_type?: string
@@ -47,8 +55,6 @@ export interface Lead {
   ring_size?: string
   desired_style?: string
   original_message?: string
-  instagram?: string
-  email?: string
   budget?: number
   lead_status: string
   priority: string
@@ -56,15 +62,18 @@ export interface Lead {
   notes?: string
   created_at: string
   updated_at: string
+  // Relations
   customers?: Customer
-  quotes?: Quote[]
+  quotes?: Quote
+  orders?: Order
 }
 
 export interface Quote {
   id: string
   quote_number: string
-  customer_id?: string
+  customer_id?: string   // nullable until order is created
   lead_id?: string
+  order_id?: string      // nullable until converted to order
   jewelry_type?: string
   description?: string
   diamond_type?: string
@@ -89,9 +98,11 @@ export interface Quote {
   profit_margin: number
   quote_status: string
   valid_until?: string
+  estimated_delivery_time?: string
   notes?: string
   created_at: string
   updated_at: string
+  // Relations
   customers?: Customer
   leads?: Lead
 }
@@ -99,8 +110,9 @@ export interface Quote {
 export interface Order {
   id: string
   order_number: string
-  customer_id?: string
+  customer_id: string    // NOT nullable — every order must have a customer
   quote_id?: string
+  lead_id?: string
   jewelry_type?: string
   description?: string
   diamond_type?: string
@@ -108,11 +120,13 @@ export interface Order {
   diamond_certificate?: string
   gold_type?: string
   gold_color?: string
+  carat?: number
   size?: string
   engraving?: string
   supplier_id?: string
   order_status: string
   production_status?: string
+  production_notes?: string
   sale_price: number
   deposit_amount: number
   balance_due: number
@@ -124,6 +138,7 @@ export interface Order {
   notes?: string
   created_at: string
   updated_at: string
+  // Relations
   customers?: Customer
   quotes?: Quote
   suppliers?: Supplier
@@ -161,6 +176,21 @@ export interface Expense {
   suppliers?: Supplier
 }
 
+export interface Task {
+  id: string
+  related_type?: string
+  related_id?: string
+  customer_id?: string
+  title: string
+  description?: string
+  task_type?: string
+  due_date?: string
+  status: string
+  priority: string
+  completed_at?: string
+  created_at: string
+}
+
 export interface FileRecord {
   id: string
   related_type?: string
@@ -172,33 +202,18 @@ export interface FileRecord {
   created_at: string
 }
 
-export interface Task {
-  id: string
-  related_type?: string
-  related_id?: string
-  title: string
-  description?: string
-  due_date?: string
-  status: string
-  priority: string
-  created_at: string
-}
-
-export type CustomerStatus = 'חדש' | 'פעיל' | 'לא פעיל' | 'VIP'
-export type LeadStatus = 'חדש' | 'בטיפול' | 'ממתין' | 'הומר' | 'נסגר'
-export type LeadPriority = 'גבוה' | 'בינוני' | 'נמוך'
-export type QuoteStatus = 'טיוטה' | 'נשלחה' | 'אושרה' | 'נדחתה' | 'פג תוקף'
-export type OrderStatus = 'הזמנה חדשה' | 'בייצור' | 'מוכן' | 'נמסר' | 'בוטל'
-export type PaymentStatus = 'לא שולם' | 'שולם חלקית' | 'שולם במלואו'
-export type TaskStatus = 'פתוח' | 'בביצוע' | 'הושלם'
-
 export interface DashboardMetrics {
   monthlyRevenue: number
   monthlyExpenses: number
   monthlyProfit: number
   openOrders: number
   openQuotes: number
-  newLeads: number
+  activeLeads: number
+  waitingForDetails: number
   unpaidBalance: number
   upcomingDeliveries: number
+  realCustomers: number
+  repeatCustomers: number
+  waitingForDeposit: number
+  inProduction: number
 }

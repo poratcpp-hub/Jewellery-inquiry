@@ -9,8 +9,8 @@ import { Badge, getStatusBadgeVariant } from '@/components/ui/badge'
 import { useToast } from '@/components/ui/toast'
 import { formatCurrency, formatDate, getProfitColor } from '@/lib/utils'
 import { getCustomerFull } from '@/lib/data'
-import type { Customer, Lead, Quote, Order } from '@/lib/types'
-import { ArrowRight, Phone, AtSign, Mail, MapPin, Star, FileText, ShoppingBag, Target, ExternalLink } from 'lucide-react'
+import type { Customer, Lead, Order } from '@/lib/types'
+import { ArrowRight, Phone, AtSign, Mail, MapPin, Star, ShoppingBag, Target, ExternalLink } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 function StatCard({ label, value, sub, variant }: { label: string; value: string; sub?: string; variant?: 'gold' | 'green' | 'red' }) {
@@ -29,14 +29,14 @@ function StatCard({ label, value, sub, variant }: { label: string; value: string
   )
 }
 
-type ActiveTab = 'leads' | 'quotes' | 'orders'
+type ActiveTab = 'orders' | 'leads'
 
 export default function CustomerDetailPage() {
   const { id } = useParams<{ id: string }>()
   const { toast } = useToast()
   const [customer, setCustomer] = useState<Customer | null>(null)
   const [loading, setLoading] = useState(true)
-  const [tab, setTab] = useState<ActiveTab>('leads')
+  const [tab, setTab] = useState<ActiveTab>('orders')
 
   useEffect(() => {
     getCustomerFull(id)
@@ -59,12 +59,12 @@ export default function CustomerDetailPage() {
     </Shell>
   )
 
-  const leads = customer.leads || []
-  const quotes = customer.quotes || []
   const orders = customer.orders || []
-  const totalRevenue = orders.reduce((s, o) => s + o.sale_price, 0)
-  const totalProfit = orders.reduce((s, o) => s + o.net_profit, 0)
-  const activeLeads = leads.filter(l => !['הומר', 'נסגר'].includes(l.lead_status)).length
+  const convertedLeads = customer.converted_leads || []
+
+  // Use pre-calculated stats if available, fall back to computed
+  const totalRevenue = customer.total_revenue ?? orders.reduce((s, o) => s + o.sale_price, 0)
+  const totalProfit = customer.total_profit ?? orders.reduce((s, o) => s + o.net_profit, 0)
   const avgMargin = orders.length > 0 ? orders.reduce((s, o) => s + o.profit_margin, 0) / orders.length : 0
 
   const isVip = customer.customer_status === 'VIP'
@@ -145,7 +145,7 @@ export default function CustomerDetailPage() {
         {/* Stats */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <StatCard label="הזמנות" value={String(orders.length)} />
-          <StatCard label="לידים פעילים" value={String(activeLeads)} />
+          <StatCard label="לידים שהומרו" value={String(convertedLeads.length)} />
           <StatCard label="סה&quot;כ רכישות" value={formatCurrency(totalRevenue)} variant="gold" />
           <StatCard
             label="רווח כולל"
@@ -159,9 +159,8 @@ export default function CustomerDetailPage() {
         <div className="bg-white rounded-xl border border-[#e5ddd0] overflow-hidden">
           <div className="flex border-b border-[#e5ddd0]">
             {([
-              { key: 'leads', label: 'לידים', count: leads.length, icon: Target },
-              { key: 'quotes', label: 'הצעות מחיר', count: quotes.length, icon: FileText },
               { key: 'orders', label: 'הזמנות', count: orders.length, icon: ShoppingBag },
+              { key: 'leads', label: 'לידים שהומרו', count: convertedLeads.length, icon: Target },
             ] as const).map(({ key, label, count, icon: Icon }) => (
               <button
                 key={key}
@@ -184,59 +183,6 @@ export default function CustomerDetailPage() {
           </div>
 
           <div className="p-4">
-            {/* Leads tab */}
-            {tab === 'leads' && (
-              leads.length === 0 ? (
-                <p className="text-sm text-[#7a6a52] text-center py-6">אין לידים ללקוח זה</p>
-              ) : (
-                <div className="space-y-2">
-                  {leads.map((lead: Lead) => (
-                    <Link key={lead.id} href={`/leads/${lead.id}`}>
-                      <div className="flex items-center justify-between p-3 bg-[#faf8f5] rounded-lg hover:bg-[#f0ebe0] transition-colors cursor-pointer">
-                        <div>
-                          <p className="text-sm font-medium text-[#2c1810]">{lead.jewelry_type || 'ליד'}</p>
-                          <p className="text-xs text-[#7a6a52]">{formatDate(lead.created_at)} · {lead.source || ''}</p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {lead.budget && <span className="text-xs text-[#7a6a52]">{formatCurrency(lead.budget)}</span>}
-                          <Badge variant={getStatusBadgeVariant(lead.lead_status)}>{lead.lead_status}</Badge>
-                          <ExternalLink size={13} className="text-[#7a6a52]" />
-                        </div>
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-              )
-            )}
-
-            {/* Quotes tab */}
-            {tab === 'quotes' && (
-              quotes.length === 0 ? (
-                <p className="text-sm text-[#7a6a52] text-center py-6">אין הצעות מחיר ללקוח זה</p>
-              ) : (
-                <div className="space-y-2">
-                  {quotes.map((quote: Quote) => (
-                    <Link key={quote.id} href={`/quotes/${quote.id}`}>
-                      <div className="flex items-center justify-between p-3 bg-[#faf8f5] rounded-lg hover:bg-[#f0ebe0] transition-colors cursor-pointer">
-                        <div>
-                          <p className="text-sm font-medium text-[#2c1810] font-mono">{quote.quote_number}</p>
-                          <p className="text-xs text-[#7a6a52]">{quote.jewelry_type || '—'} · {formatDate(quote.created_at)}</p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-semibold text-[#b8934a]">{formatCurrency(quote.sale_price)}</span>
-                          {quote.profit_margin > 0 && (
-                            <span className={cn('text-xs', getProfitColor(quote.profit_margin))}>{quote.profit_margin.toFixed(0)}%</span>
-                          )}
-                          <Badge variant={getStatusBadgeVariant(quote.quote_status)}>{quote.quote_status}</Badge>
-                          <ExternalLink size={13} className="text-[#7a6a52]" />
-                        </div>
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-              )
-            )}
-
             {/* Orders tab */}
             {tab === 'orders' && (
               orders.length === 0 ? (
@@ -256,11 +202,36 @@ export default function CustomerDetailPage() {
                         <div className="flex items-center gap-2">
                           <div className="text-right">
                             <p className="text-sm font-semibold text-[#b8934a]">{formatCurrency(order.sale_price)}</p>
-                            {order.balance_due > 0 && (
-                              <p className="text-xs text-red-600">יתרה: {formatCurrency(order.balance_due)}</p>
+                            {order.profit_margin > 0 && (
+                              <p className={cn('text-xs', getProfitColor(order.profit_margin))}>{order.profit_margin.toFixed(0)}% רווח</p>
                             )}
                           </div>
                           <Badge variant={getStatusBadgeVariant(order.order_status)}>{order.order_status}</Badge>
+                          <ExternalLink size={13} className="text-[#7a6a52]" />
+                        </div>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              )
+            )}
+
+            {/* Converted leads tab */}
+            {tab === 'leads' && (
+              convertedLeads.length === 0 ? (
+                <p className="text-sm text-[#7a6a52] text-center py-6">אין לידים שהומרו להזמנה ללקוח זה</p>
+              ) : (
+                <div className="space-y-2">
+                  {convertedLeads.map((lead: Lead) => (
+                    <Link key={lead.id} href={`/leads/${lead.id}`}>
+                      <div className="flex items-center justify-between p-3 bg-[#faf8f5] rounded-lg hover:bg-[#f0ebe0] transition-colors cursor-pointer">
+                        <div>
+                          <p className="text-sm font-medium text-[#2c1810]">{lead.jewelry_type || 'ליד'}</p>
+                          <p className="text-xs text-[#7a6a52]">{formatDate(lead.created_at)} · {lead.source || ''}</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {lead.budget && <span className="text-xs text-[#7a6a52]">{formatCurrency(lead.budget)}</span>}
+                          <Badge variant={getStatusBadgeVariant(lead.lead_status)}>{lead.lead_status}</Badge>
                           <ExternalLink size={13} className="text-[#7a6a52]" />
                         </div>
                       </div>

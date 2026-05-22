@@ -26,7 +26,7 @@ function AlertsWidget({ leads, quotes, orders }: { leads: Lead[], quotes: Quote[
     return d <= now
   })
   const expiringQuotes = quotes.filter(q => {
-    if (!q.valid_until || q.quote_status !== 'נשלחה') return false
+    if (!q.valid_until || q.quote_status !== 'נשלחה ללקוח') return false
     const d = new Date(q.valid_until); d.setHours(0, 0, 0, 0)
     return d >= now && d <= in7Days
   })
@@ -96,16 +96,16 @@ function AlertsWidget({ leads, quotes, orders }: { leads: Lead[], quotes: Quote[
 function ConversionFunnel({ leads, quotes, orders }: { leads: Lead[], quotes: Quote[], orders: Order[] }) {
   const steps = useMemo(() => {
     const totalLeads = leads.length
-    const convertedLeads = leads.filter(l => l.lead_status === 'הומר').length
+    const convertedLeads = leads.filter(l => l.lead_status === 'נסגר להזמנה').length
     const totalQuotes = quotes.length
     const approvedQuotes = quotes.filter(q => q.quote_status === 'אושרה').length
     const totalOrders = orders.length
-    const deliveredOrders = orders.filter(o => o.order_status === 'נמסר').length
+    const deliveredOrders = orders.filter(o => o.order_status === 'הושלם').length
 
     return [
       { label: 'לידים', total: totalLeads, sub: `${convertedLeads} הומרו`, pct: totalLeads > 0 ? Math.round((convertedLeads / totalLeads) * 100) : 0, color: 'bg-blue-400' },
       { label: 'הצעות מחיר', total: totalQuotes, sub: `${approvedQuotes} אושרו`, pct: totalQuotes > 0 ? Math.round((approvedQuotes / totalQuotes) * 100) : 0, color: 'bg-[#b8934a]' },
-      { label: 'הזמנות', total: totalOrders, sub: `${deliveredOrders} נמסרו`, pct: totalOrders > 0 ? Math.round((deliveredOrders / totalOrders) * 100) : 0, color: 'bg-emerald-500' },
+      { label: 'הזמנות', total: totalOrders, sub: `${deliveredOrders} הושלמו`, pct: totalOrders > 0 ? Math.round((deliveredOrders / totalOrders) * 100) : 0, color: 'bg-emerald-500' },
     ]
   }, [leads, quotes, orders])
 
@@ -169,7 +169,12 @@ export default function DashboardPage() {
           monthlyProfit: monthlyRevenue - monthlyExpenses,
           openOrders: enrichedOrders.filter(o => !CLOSED_ORDER_STATUSES.has(o.order_status)).length,
           openQuotes: quotes.filter(q => !CLOSED_QUOTE_STATUSES.has(q.quote_status)).length,
-          newLeads: leads.filter(l => !CLOSED_LEAD_STATUSES.has(l.lead_status)).length,
+          activeLeads: leads.filter(l => !CLOSED_LEAD_STATUSES.has(l.lead_status)).length,
+          waitingForDetails: leads.filter(l => l.lead_status === 'מחכה לפרטים').length,
+          realCustomers: customers.length,
+          repeatCustomers: customers.filter(c => c.customer_status === 'לקוח חוזר' || c.customer_status === 'VIP').length,
+          waitingForDeposit: enrichedOrders.filter(o => o.order_status === 'מחכה למקדמה').length,
+          inProduction: enrichedOrders.filter(o => o.order_status === 'בייצור' || o.order_status === 'הועבר לייצור').length,
           unpaidBalance: enrichedOrders
             .filter(o => o.payment_status !== 'שולם במלואו')
             .reduce((s, o) => s + o.balance_due, 0),
@@ -222,7 +227,7 @@ export default function DashboardPage() {
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               <MetricCard title="הזמנות פתוחות" value={String(metrics.openOrders)} subtitle="בתהליך ייצור/מסירה" icon={<ShoppingBag size={20} />} />
               <MetricCard title="הצעות מחיר" value={String(metrics.openQuotes)} subtitle="טיוטות ונשלחות" icon={<FileText size={20} />} />
-              <MetricCard title="לידים פעילים" value={String(metrics.newLeads)} subtitle="מחכים לטיפול" icon={<Target size={20} />} />
+              <MetricCard title="לידים פעילים" value={String(metrics.activeLeads)} subtitle="מחכים לטיפול" icon={<Target size={20} />} />
               <MetricCard title="מסירות קרובות" value={String(metrics.upcomingDeliveries)} subtitle="14 הימים הקרובים" variant={metrics.upcomingDeliveries > 0 ? 'warning' : 'default'} icon={<Calendar size={20} />} />
             </div>
 

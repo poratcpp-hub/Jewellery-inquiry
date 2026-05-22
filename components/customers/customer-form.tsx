@@ -17,10 +17,10 @@ interface CustomerFormProps {
   onSave: (data: Partial<Customer>) => void
 }
 
-const STATUS_OPTIONS = ['חדש', 'פעיל', 'לא פעיל', 'VIP']
+const STATUS_OPTIONS = ['לקוח חדש', 'לקוח חוזר', 'VIP', 'לא פעיל']
 const SOURCE_OPTIONS = ['אינסטגרם', 'פייסבוק', 'המלצה', 'אתר', 'גוגל', 'אחר']
 
-const DEFAULTS: Partial<Customer> = { customer_status: 'חדש' }
+const DEFAULTS: Partial<Customer> = { customer_status: 'לקוח חדש' }
 
 export function CustomerForm({ open, onClose, customer, onSave }: CustomerFormProps) {
   const [form, setForm] = useState<Partial<Customer>>(customer || DEFAULTS)
@@ -129,7 +129,7 @@ export function CustomerForm({ open, onClose, customer, onSave }: CustomerFormPr
               <FormField label="סטטוס לקוח" htmlFor="customer_status">
                 <Select
                   id="customer_status"
-                  value={form.customer_status || 'חדש'}
+                  value={form.customer_status || 'לקוח חדש'}
                   onChange={e => set('customer_status', e.target.value)}
                 >
                   {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}

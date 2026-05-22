@@ -82,7 +82,7 @@ export function Sidebar({ open, onClose, onNewInquiry }: SidebarProps) {
               className="w-full flex items-center gap-2 px-3 py-3 mb-3 rounded-xl bg-[#b8934a] text-white font-semibold text-sm hover:bg-[#a07840] transition-colors shadow-sm"
             >
               <Plus size={18} className="shrink-0" />
-              פנייה חדשה
+              + ליד חדש
             </button>
           )}
           <ul className="space-y-1">

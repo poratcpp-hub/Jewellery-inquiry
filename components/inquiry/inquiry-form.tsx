@@ -10,7 +10,7 @@ import { FormField, FormGrid, FormSection } from '@/components/ui/form-field'
 import { useToast } from '@/components/ui/toast'
 import { SOURCES, JEWELRY_TYPES, DIAMOND_TYPES, GOLD_TYPES, GOLD_COLORS } from '@/lib/constants'
 import { detectJewelryType, getAutoLeadStatus } from '@/lib/workflow'
-import { findCustomerByContact, upsertCustomer, upsertLead } from '@/lib/data'
+import { upsertLead } from '@/lib/data'
 import type { Lead } from '@/lib/types'
 
 interface InquiryFormProps {
@@ -20,7 +20,7 @@ interface InquiryFormProps {
 }
 
 interface FormData {
-  customer_name: string
+  full_name: string
   phone: string
   instagram: string
   email: string
@@ -38,7 +38,7 @@ interface FormData {
 }
 
 const EMPTY: FormData = {
-  customer_name: '', phone: '', instagram: '', email: '',
+  full_name: '', phone: '', instagram: '', email: '',
   source: '', original_message: '', jewelry_type: '', budget: '',
   diamond_type: '', gold_type: '', gold_color: '', carat: '',
   ring_size: '', desired_style: '', notes: '',
@@ -60,7 +60,6 @@ export function InquiryForm({ open, onClose, onCreated }: InquiryFormProps) {
     }
   }, [open])
 
-  // Auto-detect jewelry type from message
   useEffect(() => {
     if (form.original_message && !form.jewelry_type && !detectedRef.current) {
       const detected = detectJewelryType(form.original_message)
@@ -78,12 +77,12 @@ export function InquiryForm({ open, onClose, onCreated }: InquiryFormProps) {
 
   const validate = (): boolean => {
     const e: Partial<Record<keyof FormData, string>> = {}
-    if (!form.customer_name.trim()) e.customer_name = 'שם הוא שדה חובה'
+    if (!form.full_name.trim()) e.full_name = 'שם הוא שדה חובה'
     if (!form.phone.trim() && !form.instagram.trim() && !form.email.trim())
-      e.phone = 'נדרשת לפחות דרך יצירת קשר אחת (טלפון / אינסטגרם / מייל)'
-    if (!form.source) e.source = 'נדרש מקור פנייה'
+      e.phone = 'נדרשת לפחות דרך יצירת קשר אחת'
+    if (!form.source) e.source = 'נדרש מקור'
     if (!form.original_message.trim() && !form.jewelry_type)
-      e.original_message = 'נדרשת הודעת פנייה או בחירת סוג תכשיט'
+      e.original_message = 'נדרשת הודעת פנייה או סוג תכשיט'
     setErrors(e)
     return Object.keys(e).length === 0
   }
@@ -92,30 +91,8 @@ export function InquiryForm({ open, onClose, onCreated }: InquiryFormProps) {
     if (!validate()) return
     setSaving(true)
     try {
-      // 1. Find existing customer by phone → instagram → email
-      const existing = await findCustomerByContact(
-        form.phone || undefined,
-        form.instagram || undefined,
-        form.email || undefined,
-      )
-
-      let customer = existing
-      const isNew = !existing
-      if (!customer) {
-        customer = await upsertCustomer({
-          full_name: form.customer_name,
-          phone: form.phone || undefined,
-          instagram: form.instagram || undefined,
-          email: form.email || undefined,
-          source: form.source || undefined,
-          customer_status: 'ליד חדש',
-        })
-      }
-
-      // 2. Build lead and determine auto-status
       const leadData: Partial<Lead> = {
-        customer_id: customer.id,
-        full_name: form.customer_name,
+        full_name: form.full_name,
         phone: form.phone || undefined,
         instagram: form.instagram || undefined,
         email: form.email || undefined,
@@ -134,22 +111,19 @@ export function InquiryForm({ open, onClose, onCreated }: InquiryFormProps) {
       }
       leadData.lead_status = getAutoLeadStatus(leadData)
 
-      // 3. Create lead
       const lead = await upsertLead(leadData)
 
       toast({
-        type: isNew ? 'success' : 'info',
-        title: 'פנייה חדשה נפתחה',
-        description: isNew
-          ? `לקוח חדש נוצר: "${customer.full_name}" · סטטוס ליד: ${lead.lead_status}`
-          : `קושר ללקוח קיים: "${customer.full_name}" · סטטוס ליד: ${lead.lead_status}`,
+        type: 'success',
+        title: `ליד חדש נפתח`,
+        description: `${form.full_name} · סטטוס: ${lead.lead_status}`,
       })
 
       onCreated?.(lead)
       onClose()
     } catch (err) {
-      console.error('Inquiry submit failed:', err)
-      toast({ type: 'error', title: 'שגיאה בפתיחת הפנייה' })
+      console.error('Lead creation failed:', err)
+      toast({ type: 'error', title: 'שגיאה בפתיחת הליד' })
     } finally {
       setSaving(false)
     }
@@ -157,47 +131,47 @@ export function InquiryForm({ open, onClose, onCreated }: InquiryFormProps) {
 
   return (
     <Dialog open={open} onClose={onClose} className="max-w-2xl mx-4">
-      <DialogHeader title="פנייה חדשה" onClose={onClose} />
+      <DialogHeader title="+ ליד חדש" onClose={onClose} />
       <DialogBody className="space-y-5">
 
-        <FormSection title="פרטי לקוח">
+        <FormSection title="פרטי ליד">
           <FormGrid>
-            <FormField label="שם מלא" required error={errors.customer_name} htmlFor="iq_name">
+            <FormField label="שם מלא" required error={errors.full_name} htmlFor="lf_name">
               <Input
-                id="iq_name"
-                value={form.customer_name}
-                onChange={e => set('customer_name', e.target.value)}
+                id="lf_name"
+                value={form.full_name}
+                onChange={e => set('full_name', e.target.value)}
                 placeholder="שם ומשפחה"
                 autoFocus
               />
             </FormField>
-            <FormField label="טלפון" error={errors.phone} htmlFor="iq_phone">
+            <FormField label="טלפון" error={errors.phone} htmlFor="lf_phone">
               <Input
-                id="iq_phone"
+                id="lf_phone"
                 value={form.phone}
                 onChange={e => set('phone', e.target.value)}
                 placeholder="050-0000000"
               />
             </FormField>
-            <FormField label="אינסטגרם" htmlFor="iq_ig">
+            <FormField label="אינסטגרם" htmlFor="lf_ig">
               <Input
-                id="iq_ig"
+                id="lf_ig"
                 value={form.instagram}
                 onChange={e => set('instagram', e.target.value)}
                 placeholder="@username"
               />
             </FormField>
-            <FormField label='דוא"ל' htmlFor="iq_email">
+            <FormField label='דוא"ל' htmlFor="lf_email">
               <Input
-                id="iq_email"
+                id="lf_email"
                 value={form.email}
                 onChange={e => set('email', e.target.value)}
                 placeholder="email@example.com"
               />
             </FormField>
           </FormGrid>
-          <FormField label="מקור פנייה" required error={errors.source} htmlFor="iq_source">
-            <Select id="iq_source" value={form.source} onChange={e => set('source', e.target.value)}>
+          <FormField label="מקור" required error={errors.source} htmlFor="lf_source">
+            <Select id="lf_source" value={form.source} onChange={e => set('source', e.target.value)}>
               <option value="">בחר מקור</option>
               {SOURCES.map(s => <option key={s} value={s}>{s}</option>)}
             </Select>
@@ -205,99 +179,70 @@ export function InquiryForm({ open, onClose, onCreated }: InquiryFormProps) {
         </FormSection>
 
         <FormSection title="פרטי הפנייה">
-          <FormField label="הודעה מקורית מהלקוח" error={errors.original_message} htmlFor="iq_msg">
+          <FormField label="הודעה מקורית" error={errors.original_message} htmlFor="lf_msg">
             <Textarea
-              id="iq_msg"
+              id="lf_msg"
               value={form.original_message}
               onChange={e => set('original_message', e.target.value)}
-              placeholder="הדבק כאן את ההודעה שקיבלת מהלקוח — סוג התכשיט יזוהה אוטומטית..."
+              placeholder="הדבק את ההודעה שקיבלת — סוג התכשיט יזוהה אוטומטית..."
               rows={3}
             />
           </FormField>
 
           <FormGrid cols={3}>
-            <FormField label="סוג תכשיט" htmlFor="iq_jtype">
-              <Select id="iq_jtype" value={form.jewelry_type} onChange={e => { set('jewelry_type', e.target.value); detectedRef.current = true }}>
-                <option value="">זוהה אוטומטית / בחר</option>
+            <FormField label="סוג תכשיט" htmlFor="lf_jtype">
+              <Select id="lf_jtype" value={form.jewelry_type} onChange={e => { set('jewelry_type', e.target.value); detectedRef.current = true }}>
+                <option value="">זיהוי אוטומטי / בחר</option>
                 {JEWELRY_TYPES.map(j => <option key={j} value={j}>{j}</option>)}
               </Select>
             </FormField>
-            <FormField label="תקציב (₪)" htmlFor="iq_budget">
-              <Input
-                id="iq_budget"
-                type="number"
-                value={form.budget}
-                onChange={e => set('budget', e.target.value)}
-                placeholder="10000"
-              />
+            <FormField label="תקציב (₪)" htmlFor="lf_budget">
+              <Input id="lf_budget" type="number" value={form.budget} onChange={e => set('budget', e.target.value)} placeholder="10000" />
             </FormField>
-            <FormField label="סגנון רצוי" htmlFor="iq_style">
-              <Input
-                id="iq_style"
-                value={form.desired_style}
-                onChange={e => set('desired_style', e.target.value)}
-                placeholder="הילה, פאווה, סוליטר..."
-              />
+            <FormField label="סגנון רצוי" htmlFor="lf_style">
+              <Input id="lf_style" value={form.desired_style} onChange={e => set('desired_style', e.target.value)} placeholder="הילה, פאווה, סוליטר..." />
             </FormField>
           </FormGrid>
         </FormSection>
 
         <FormSection title="פרטי תכשיט (אופציונלי)">
           <FormGrid cols={3}>
-            <FormField label="סוג יהלום" htmlFor="iq_dtype">
-              <Select id="iq_dtype" value={form.diamond_type} onChange={e => set('diamond_type', e.target.value)}>
+            <FormField label="סוג יהלום" htmlFor="lf_dtype">
+              <Select id="lf_dtype" value={form.diamond_type} onChange={e => set('diamond_type', e.target.value)}>
                 <option value="">בחר</option>
                 {DIAMOND_TYPES.map(d => <option key={d} value={d}>{d}</option>)}
               </Select>
             </FormField>
-            <FormField label="קראט" htmlFor="iq_carat">
-              <Input
-                id="iq_carat"
-                type="number"
-                step="0.01"
-                value={form.carat}
-                onChange={e => set('carat', e.target.value)}
-                placeholder="1.00"
-              />
+            <FormField label="קראט" htmlFor="lf_carat">
+              <Input id="lf_carat" type="number" step="0.01" value={form.carat} onChange={e => set('carat', e.target.value)} placeholder="1.00" />
             </FormField>
-            <FormField label="סוג זהב" htmlFor="iq_gtype">
-              <Select id="iq_gtype" value={form.gold_type} onChange={e => set('gold_type', e.target.value)}>
+            <FormField label="סוג זהב" htmlFor="lf_gtype">
+              <Select id="lf_gtype" value={form.gold_type} onChange={e => set('gold_type', e.target.value)}>
                 <option value="">בחר</option>
                 {GOLD_TYPES.map(g => <option key={g} value={g}>{g}</option>)}
               </Select>
             </FormField>
-            <FormField label="צבע זהב" htmlFor="iq_gcolor">
-              <Select id="iq_gcolor" value={form.gold_color} onChange={e => set('gold_color', e.target.value)}>
+            <FormField label="צבע זהב" htmlFor="lf_gcolor">
+              <Select id="lf_gcolor" value={form.gold_color} onChange={e => set('gold_color', e.target.value)}>
                 <option value="">בחר</option>
                 {GOLD_COLORS.map(c => <option key={c} value={c}>{c}</option>)}
               </Select>
             </FormField>
-            <FormField label="מידה (טבעת)" htmlFor="iq_size">
-              <Input
-                id="iq_size"
-                value={form.ring_size}
-                onChange={e => set('ring_size', e.target.value)}
-                placeholder="6.5"
-              />
+            <FormField label="מידה" htmlFor="lf_size">
+              <Input id="lf_size" value={form.ring_size} onChange={e => set('ring_size', e.target.value)} placeholder="6.5" />
             </FormField>
           </FormGrid>
         </FormSection>
 
-        <FormField label="הערות" htmlFor="iq_notes">
-          <Textarea
-            id="iq_notes"
-            value={form.notes}
-            onChange={e => set('notes', e.target.value)}
-            placeholder="הערות נוספות..."
-            rows={2}
-          />
+        <FormField label="הערות" htmlFor="lf_notes">
+          <Textarea id="lf_notes" value={form.notes} onChange={e => set('notes', e.target.value)} placeholder="הערות נוספות..." rows={2} />
         </FormField>
 
       </DialogBody>
       <DialogFooter>
         <Button variant="outline" onClick={onClose} disabled={saving}>ביטול</Button>
         <Button onClick={handleSubmit} disabled={saving}>
-          {saving ? 'פותח...' : '+ פתח פנייה'}
+          {saving ? 'פותח...' : '+ ליד חדש'}
         </Button>
       </DialogFooter>
     </Dialog>

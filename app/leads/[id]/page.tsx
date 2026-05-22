@@ -11,7 +11,7 @@ import { formatCurrency, formatDate, generateQuoteNumber } from '@/lib/utils'
 import { getLead, upsertQuote, upsertLead } from '@/lib/data'
 import { getMissingDetails, generateMissingDetailsMessage, getNextAction } from '@/lib/workflow'
 import type { Lead } from '@/lib/types'
-import { ArrowRight, Copy, FileText, Phone, AtSign, AlertTriangle, CheckCircle, Clock, MessageSquare } from 'lucide-react'
+import { ArrowRight, Copy, FileText, Phone, AtSign, AlertTriangle, CheckCircle, Clock, MessageSquare, XCircle, ExternalLink } from 'lucide-react'
 
 export default function LeadDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -45,8 +45,8 @@ export default function LeadDetailPage() {
     try {
       const quote = await upsertQuote({
         quote_number: generateQuoteNumber(),
-        customer_id: lead.customer_id,
         lead_id: lead.id,
+        customer_id: lead.customer_id || undefined,
         jewelry_type: lead.jewelry_type,
         description: lead.original_message,
         diamond_type: lead.diamond_type,
@@ -58,18 +58,29 @@ export default function LeadDetailPage() {
         setting_cost: 0, packaging_cost: 0, shipping_cost: 0, other_cost: 0,
         total_cost: 0, sale_price: 0, expected_profit: 0, profit_margin: 0,
       })
-      const updated = await upsertLead({ ...lead, lead_status: 'בטיפול' })
+      const updated = await upsertLead({ ...lead, lead_status: 'מוכן להצעת מחיר', quote_id: quote.id })
       setLead(updated)
       toast({
         type: 'success',
         title: `הצעת מחיר ${quote.quote_number} נפתחה`,
-        description: 'נוסף לעמוד הצעות המחיר — השלם מחירים ושלח ללקוח',
+        description: 'השלם עלויות ומחיר מכירה ושלח ללקוח',
       })
     } catch (err) {
       console.error(err)
       toast({ type: 'error', title: 'שגיאה ביצירת הצעת מחיר' })
     } finally {
       setCreatingQuote(false)
+    }
+  }, [lead, toast])
+
+  const handleMarkIrrelevant = useCallback(async () => {
+    if (!lead) return
+    try {
+      const updated = await upsertLead({ ...lead, lead_status: 'לא רלוונטי' })
+      setLead(updated)
+      toast({ type: 'success', title: 'הליד סומן כלא רלוונטי' })
+    } catch {
+      toast({ type: 'error', title: 'שגיאה בעדכון הסטטוס' })
     }
   }, [lead, toast])
 
@@ -87,7 +98,8 @@ export default function LeadDetailPage() {
     </Shell>
   )
 
-  const customer = lead.customers
+  const isClosed = lead.lead_status === 'נסגר להזמנה' || lead.lead_status === 'לא רלוונטי'
+
   const actionColors = {
     reply: 'bg-red-50 border-red-200',
     fill_details: 'bg-amber-50 border-amber-200',
@@ -116,11 +128,33 @@ export default function LeadDetailPage() {
             <h1 className="text-xl font-bold text-[#2c1810]">{lead.full_name || '—'}</h1>
             <p className="text-sm text-[#7a6a52]">{formatDate(lead.created_at)} · {lead.source || ''}</p>
           </div>
-          <div className="mr-auto flex gap-2">
+          <div className="mr-auto flex gap-2 flex-wrap justify-end">
             <Badge variant={getStatusBadgeVariant(lead.lead_status)}>{lead.lead_status}</Badge>
             <Badge variant={getStatusBadgeVariant(lead.priority)}>{lead.priority}</Badge>
           </div>
         </div>
+
+        {/* Linked quote / order banners */}
+        {lead.order_id && (
+          <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex items-center justify-between">
+            <span className="text-sm font-medium text-emerald-800">ליד זה הומר להזמנה</span>
+            <Link href={`/orders/${lead.order_id}`}>
+              <Button size="sm" variant="outline" className="border-emerald-300 text-emerald-700 hover:bg-emerald-100">
+                <ExternalLink size={13} />פתח הזמנה
+              </Button>
+            </Link>
+          </div>
+        )}
+        {lead.quote_id && !lead.order_id && (
+          <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 flex items-center justify-between">
+            <span className="text-sm font-medium text-blue-800">הצעת מחיר נפתחה לליד זה</span>
+            <Link href={`/quotes/${lead.quote_id}`}>
+              <Button size="sm" variant="outline" className="border-blue-300 text-blue-700 hover:bg-blue-100">
+                <ExternalLink size={13} />פתח הצעה
+              </Button>
+            </Link>
+          </div>
+        )}
 
         {/* Next action card */}
         {nextAction && nextAction.action !== 'done' && (
@@ -137,7 +171,7 @@ export default function LeadDetailPage() {
                     <Copy size={14} />העתק הודעת השלמה
                   </Button>
                 )}
-                {nextAction.action === 'create_quote' && (
+                {nextAction.action === 'create_quote' && !lead.quote_id && (
                   <Button size="sm" onClick={handleCreateQuote} disabled={creatingQuote}>
                     <FileText size={14} />{creatingQuote ? 'יוצר...' : 'צור הצעת מחיר'}
                   </Button>
@@ -152,38 +186,40 @@ export default function LeadDetailPage() {
           </div>
         )}
 
-        {/* Customer card */}
+        {/* Contact details */}
         <div className="bg-white rounded-xl border border-[#e5ddd0] p-4">
-          <h2 className="font-semibold text-[#2c1810] mb-3 text-sm">פרטי לקוח</h2>
+          <h2 className="font-semibold text-[#2c1810] mb-3 text-sm">פרטי קשר</h2>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
             <div>
               <p className="text-xs text-[#7a6a52] mb-0.5">שם</p>
-              <p className="font-medium">{customer?.full_name || lead.full_name || '—'}</p>
+              <p className="font-medium">{lead.full_name || '—'}</p>
             </div>
-            {(lead.phone || customer?.phone) && (
+            {lead.phone && (
               <div>
                 <p className="text-xs text-[#7a6a52] mb-0.5">טלפון</p>
-                <a href={`tel:${lead.phone || customer?.phone}`} className="flex items-center gap-1 text-[#b8934a] hover:underline">
-                  <Phone size={12} />{lead.phone || customer?.phone}
+                <a href={`tel:${lead.phone}`} className="flex items-center gap-1 text-[#b8934a] hover:underline">
+                  <Phone size={12} />{lead.phone}
                 </a>
               </div>
             )}
-            {customer?.instagram && (
+            {lead.instagram && (
               <div>
                 <p className="text-xs text-[#7a6a52] mb-0.5">אינסטגרם</p>
-                <span className="flex items-center gap-1"><AtSign size={12} />{customer.instagram}</span>
+                <span className="flex items-center gap-1"><AtSign size={12} />{lead.instagram}</span>
               </div>
             )}
-            {customer?.email && (
+            {lead.email && (
               <div>
                 <p className="text-xs text-[#7a6a52] mb-0.5">דוא&quot;ל</p>
-                <p>{customer.email}</p>
+                <p>{lead.email}</p>
               </div>
             )}
-            {customer?.customer_status && (
+            {lead.customers && (
               <div>
-                <p className="text-xs text-[#7a6a52] mb-0.5">סטטוס לקוח</p>
-                <Badge variant={getStatusBadgeVariant(customer.customer_status)} className="text-xs">{customer.customer_status}</Badge>
+                <p className="text-xs text-[#7a6a52] mb-0.5">לקוח מקושר</p>
+                <Link href={`/customers/${lead.customers.id}`} className="text-[#b8934a] hover:underline text-sm flex items-center gap-1">
+                  <ExternalLink size={11} />{lead.customers.full_name}
+                </Link>
               </div>
             )}
           </div>
@@ -223,7 +259,7 @@ export default function LeadDetailPage() {
         </div>
 
         {/* Missing details */}
-        {missingDetails.length > 0 && (
+        {missingDetails.length > 0 && !isClosed && (
           <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
             <div className="flex items-start justify-between gap-3">
               <div>
@@ -252,12 +288,28 @@ export default function LeadDetailPage() {
         )}
 
         {/* Bottom actions */}
-        <div className="flex gap-2 justify-end pb-4">
-          <Button variant="outline" onClick={handleCopyMessage}><Copy size={15} />העתק הודעת השלמה</Button>
-          <Button onClick={handleCreateQuote} disabled={creatingQuote || missingDetails.length > 0}>
-            <FileText size={15} />{creatingQuote ? 'יוצר...' : 'צור הצעת מחיר מהליד'}
-          </Button>
-        </div>
+        {!isClosed && (
+          <div className="flex gap-2 justify-between pb-4">
+            <Button variant="outline" onClick={handleMarkIrrelevant} className="text-[#7a6a52] border-[#c5b8a0] hover:bg-red-50 hover:text-red-600 hover:border-red-200">
+              <XCircle size={15} />סמן כלא רלוונטי
+            </Button>
+            <div className="flex gap-2">
+              {missingDetails.length > 0 && (
+                <Button variant="outline" onClick={handleCopyMessage}><Copy size={15} />העתק הודעת השלמה</Button>
+              )}
+              {!lead.quote_id && (
+                <Button onClick={handleCreateQuote} disabled={creatingQuote || missingDetails.length > 0}>
+                  <FileText size={15} />{creatingQuote ? 'יוצר...' : 'צור הצעת מחיר'}
+                </Button>
+              )}
+              {lead.quote_id && (
+                <Link href={`/quotes/${lead.quote_id}`}>
+                  <Button><FileText size={15} />פתח הצעת מחיר</Button>
+                </Link>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </Shell>
   )

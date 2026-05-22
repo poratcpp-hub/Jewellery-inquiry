@@ -10,7 +10,7 @@ import { Select } from '@/components/ui/select'
 import { useToast } from '@/components/ui/toast'
 import { QuoteForm } from '@/components/quotes/quote-form'
 import { formatCurrency, formatDate, generateOrderNumber, getProfitColor } from '@/lib/utils'
-import { getQuote, upsertQuote, upsertOrder, getCustomers } from '@/lib/data'
+import { getQuote, upsertQuote, upsertOrder, getCustomers, findCustomerByContact, upsertCustomer, upsertLead, refreshCustomerStats } from '@/lib/data'
 import { getDealQuality, generateQuoteMessage } from '@/lib/workflow'
 import { QUOTE_STATUSES } from '@/lib/constants'
 import type { Quote, Customer } from '@/lib/types'
@@ -66,32 +66,74 @@ export default function QuoteDetailPage() {
     if (!quote) return
     setConverting(true)
     try {
+      const lead = quote.leads
+
+      // Find or create customer
+      let customer = quote.customers || null
+      if (!customer) {
+        customer = await findCustomerByContact(
+          lead?.phone || undefined,
+          lead?.instagram || undefined,
+          lead?.email || undefined,
+        )
+      }
+      if (!customer) {
+        customer = await upsertCustomer({
+          full_name: lead?.full_name || 'לקוח חדש',
+          phone: lead?.phone || undefined,
+          instagram: lead?.instagram || undefined,
+          email: lead?.email || undefined,
+          source: lead?.source || undefined,
+          customer_status: 'לקוח חדש',
+        })
+        toast({ type: 'success', title: 'לקוח חדש נוצר', description: `"${customer.full_name}" נוסף לרשימת הלקוחות` })
+      }
+
+      // Create order
+      const order = await upsertOrder({
+        order_number: generateOrderNumber(),
+        customer_id: customer.id,
+        quote_id: quote.id,
+        lead_id: lead?.id || undefined,
+        jewelry_type: quote.jewelry_type,
+        description: quote.description,
+        diamond_type: quote.diamond_type,
+        diamond_origin: quote.diamond_origin,
+        diamond_certificate: quote.diamond_certificate,
+        gold_type: quote.gold_type,
+        gold_color: quote.gold_color,
+        carat: quote.carat,
+        order_status: 'מחכה למקדמה',
+        payment_status: 'לא שולם',
+        sale_price: quote.sale_price,
+        deposit_amount: 0,
+        balance_due: quote.sale_price,
+        total_cost: quote.total_cost,
+        net_profit: quote.expected_profit,
+        profit_margin: quote.profit_margin,
+      })
+
+      // Update quote and lead atomically
       await Promise.all([
-        upsertOrder({
-          order_number: generateOrderNumber(),
-          customer_id: quote.customer_id,
-          quote_id: quote.id,
-          jewelry_type: quote.jewelry_type,
-          description: quote.description,
-          diamond_type: quote.diamond_type,
-          diamond_origin: quote.diamond_origin,
-          diamond_certificate: quote.diamond_certificate,
-          gold_type: quote.gold_type,
-          gold_color: quote.gold_color,
-          order_status: 'הזמנה חדשה',
-          payment_status: 'לא שולם',
-          sale_price: quote.sale_price,
-          deposit_amount: 0,
-          balance_due: quote.sale_price,
-          total_cost: quote.total_cost,
-          net_profit: quote.expected_profit,
-          profit_margin: quote.profit_margin,
-        }),
-        upsertQuote({ ...quote, quote_status: 'אושרה' }),
+        upsertQuote({ ...quote, quote_status: 'אושרה', order_id: order.id, customer_id: customer.id }),
+        lead?.id ? upsertLead({
+          ...lead,
+          lead_status: 'נסגר להזמנה',
+          order_id: order.id,
+          customer_id: customer.id,
+        }) : Promise.resolve(),
       ])
-      setQuote(q => q ? { ...q, quote_status: 'אושרה' } : q)
-      toast({ type: 'success', title: 'הזמנה נוצרה!', description: 'ההצעה אושרה וההזמנה נפתחה' })
-    } catch {
+
+      await refreshCustomerStats(customer.id)
+
+      setQuote(q => q ? { ...q, quote_status: 'אושרה', order_id: order.id, customer_id: customer!.id, customers: customer! } : q)
+      toast({
+        type: 'success',
+        title: 'הזמנה נוצרה!',
+        description: `הזמנה ${order.order_number} נפתחה ומחכה למקדמה`,
+      })
+    } catch (err) {
+      console.error(err)
       toast({ type: 'error', title: 'שגיאה ביצירת הזמנה' })
     } finally {
       setConverting(false)
@@ -160,17 +202,36 @@ export default function QuoteDetailPage() {
           </div>
         </div>
 
+        {/* Linked order banner */}
+        {quote.order_id && (
+          <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex items-center justify-between">
+            <span className="text-sm font-medium text-emerald-800">הצעה זו הומרה להזמנה</span>
+            <Link href={`/orders/${quote.order_id}`}>
+              <Button size="sm" variant="outline" className="border-emerald-300 text-emerald-700 hover:bg-emerald-100">
+                <ExternalLink size={13} />פתח הזמנה
+              </Button>
+            </Link>
+          </div>
+        )}
+
         {/* Customer card */}
         <div className="bg-white rounded-xl border border-[#e5ddd0] p-4">
           <h2 className="font-semibold text-[#2c1810] mb-3 text-sm">לקוח</h2>
           <div className="flex items-center justify-between">
             <div>
-              <p className="font-medium text-[#2c1810]">{quote.customers?.full_name || '—'}</p>
-              {quote.customers?.phone && <p className="text-sm text-[#7a6a52]">{quote.customers.phone}</p>}
+              <p className="font-medium text-[#2c1810]">{quote.customers?.full_name || quote.leads?.full_name || '—'}</p>
+              {(quote.customers?.phone || quote.leads?.phone) && (
+                <p className="text-sm text-[#7a6a52]">{quote.customers?.phone || quote.leads?.phone}</p>
+              )}
             </div>
             {quote.customers?.id && (
               <Link href={`/customers/${quote.customers.id}`}>
                 <Button variant="ghost" size="sm"><ExternalLink size={14} />פרופיל לקוח</Button>
+              </Link>
+            )}
+            {!quote.customers?.id && quote.leads?.id && (
+              <Link href={`/leads/${quote.leads.id}`}>
+                <Button variant="ghost" size="sm"><ExternalLink size={14} />פרטי ליד</Button>
               </Link>
             )}
           </div>

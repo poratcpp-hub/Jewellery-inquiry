@@ -14,11 +14,11 @@ import { TableSkeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
 import { useDebounce, useTableSort } from '@/lib/hooks'
 import { formatCurrency, formatDate, isOverdue, exportCsv } from '@/lib/utils'
-import { getLeads, upsertLead, deleteLead, getCustomers, upsertCustomer } from '@/lib/data'
-import { LEAD_STATUSES } from '@/lib/constants'
+import { getLeads, upsertLead, deleteLead, getCustomers } from '@/lib/data'
+import { LEAD_STATUSES, CLOSED_LEAD_STATUSES } from '@/lib/constants'
 import type { Lead, Customer } from '@/lib/types'
 import Link from 'next/link'
-import { Plus, Search, Pencil, Trash2, ArrowLeftRight, AlertTriangle, Download, Eye } from 'lucide-react'
+import { Plus, Search, Pencil, Trash2, AlertTriangle, Download, Eye } from 'lucide-react'
 
 export default function LeadsPage() {
   const { toast } = useToast()
@@ -51,14 +51,13 @@ export default function LeadsPage() {
   const { sorted, sortKey, sortDir, toggleSort } = useTableSort<Lead>(filtered, 'created_at', 'desc')
 
   const activeCount = useMemo(
-    () => leads.filter(l => !['הומר', 'נסגר'].includes(l.lead_status)).length,
+    () => leads.filter(l => !CLOSED_LEAD_STATUSES.has(l.lead_status)).length,
     [leads]
   )
 
   const handleSave = useCallback(async (data: Partial<Lead>) => {
     try {
       if (!editing && data.phone) {
-        // Block duplicate leads by phone
         const dupLead = leads.find(l => l.phone === data.phone)
         if (dupLead) {
           toast({ type: 'error', title: 'כפילות', description: `כבר קיים ליד עם מספר זה: "${dupLead.full_name}"` })
@@ -66,13 +65,11 @@ export default function LeadsPage() {
         }
       }
 
-      // Auto-link customer by phone on new lead creation
+      // Auto-link existing customer by phone (read-only, never creates)
       let finalData = { ...data }
       if (!editing && !data.customer_id && data.phone) {
         const existingCustomer = customers.find(c => c.phone === data.phone)
-        if (existingCustomer) {
-          finalData = { ...finalData, customer_id: existingCustomer.id }
-        }
+        if (existingCustomer) finalData = { ...finalData, customer_id: existingCustomer.id }
       }
 
       const saved = await upsertLead(editing ? { ...editing, ...finalData } : finalData)
@@ -101,38 +98,6 @@ export default function LeadsPage() {
     }
     setDeleteTarget(undefined)
   }, [deleteTarget, toast])
-
-  const convertToQuote = useCallback(async (lead: Lead) => {
-    try {
-      let customerId = lead.customer_id
-      if (!customerId) {
-        const byPhone = lead.phone ? customers.find(c => c.phone === lead.phone) : undefined
-        const byName = !byPhone
-          ? customers.find(c => c.full_name.toLowerCase() === (lead.full_name || '').toLowerCase())
-          : undefined
-        const existing = byPhone || byName
-        if (existing) {
-          customerId = existing.id
-          toast({ type: 'success', title: 'קושר ללקוח קיים', description: `"${existing.full_name}"` })
-        } else {
-          const newCustomer = await upsertCustomer({
-            full_name: lead.full_name || '',
-            phone: lead.phone,
-            source: lead.source,
-            customer_status: 'חדש',
-          })
-          customerId = newCustomer.id
-          setCustomers(prev => [newCustomer, ...prev])
-          toast({ type: 'success', title: 'לקוח חדש נוצר', description: `"${newCustomer.full_name}" נוסף ללקוחות` })
-        }
-      }
-      await upsertLead({ ...lead, lead_status: 'הומר', customer_id: customerId })
-      setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, lead_status: 'הומר', customer_id: customerId } : l))
-      toast({ type: 'success', title: 'הליד הומר', description: 'ניתן כעת ליצור הצעת מחיר' })
-    } catch {
-      toast({ type: 'error', title: 'שגיאה בהמרת הליד' })
-    }
-  }, [customers, toast])
 
   const handleExport = useCallback(() => {
     exportCsv('leads', sorted.map(l => ({
@@ -200,7 +165,7 @@ export default function LeadsPage() {
                 )}
                 {sorted.map(lead => {
                   const overdue = lead.follow_up_date && isOverdue(lead.follow_up_date) &&
-                    !['הומר', 'נסגר'].includes(lead.lead_status)
+                    !CLOSED_LEAD_STATUSES.has(lead.lead_status)
                   return (
                     <TableRow key={lead.id}>
                       <TableCell>
@@ -230,11 +195,6 @@ export default function LeadsPage() {
                         <div className="flex items-center gap-1">
                           <Link href={`/leads/${lead.id}`}><Button variant="ghost" size="icon" title="פרטים"><Eye size={15} /></Button></Link>
                           <Button variant="ghost" size="icon" onClick={() => openEdit(lead)} title="עריכה"><Pencil size={15} /></Button>
-                          {!['הומר', 'נסגר'].includes(lead.lead_status) && (
-                            <Button variant="ghost" size="icon" onClick={() => convertToQuote(lead)} title="המר לטיפול" className="text-[#b8934a]">
-                              <ArrowLeftRight size={15} />
-                            </Button>
-                          )}
                           <Button variant="ghost" size="icon" onClick={() => setDeleteTarget(lead)} title="מחיקה" className="text-red-500 hover:text-red-700 hover:bg-red-50"><Trash2 size={15} /></Button>
                         </div>
                       </TableCell>

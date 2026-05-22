@@ -10,7 +10,7 @@ import {
   demoPayments, demoExpenses, demoSuppliers,
 } from './demo-data'
 import type {
-  Customer, Lead, Quote, Order, Payment, Expense, Supplier, DashboardMetrics,
+  Customer, Lead, Quote, Order, Payment, Expense, Supplier, DashboardMetrics, Task,
 } from './types'
 
 const IS_DEMO =
@@ -78,8 +78,8 @@ export async function getLead(id: string): Promise<Lead> {
     const lead = demoLeads.find(l => l.id === id)
     if (!lead) throw new Error('Not found')
     const customer = demoCustomers.find(c => c.id === lead.customer_id)
-    const quotes = demoQuotes.filter(q => q.customer_id === lead.customer_id).map(q => ({ ...q, created_at: '', updated_at: '' }))
-    return { ...lead, created_at: '', updated_at: '', customers: customer ? { ...customer, created_at: '', updated_at: '' } : undefined, quotes } as Lead
+    const linkedQuote = lead.quote_id ? demoQuotes.find(q => q.id === lead.quote_id) : undefined
+    return { ...lead, created_at: '', updated_at: '', customers: customer ? { ...customer, created_at: '', updated_at: '' } : undefined, quotes: linkedQuote ? { ...linkedQuote, created_at: '', updated_at: '' } : undefined } as Lead
   }
   const { data, error } = await supabase
     .from('leads')
@@ -156,7 +156,7 @@ export async function getOrders(): Promise<Order[]> {
 }
 
 export async function upsertOrder(order: Partial<Order>): Promise<Order> {
-  if (IS_DEMO) return { ...order, id: order.id || crypto.randomUUID(), order_status: 'הזמנה חדשה', payment_status: 'לא שולם', sale_price: 0, deposit_amount: 0, balance_due: 0, total_cost: 0, net_profit: 0, profit_margin: 0, created_at: '', updated_at: '' } as Order
+  if (IS_DEMO) return { ...order, id: order.id || crypto.randomUUID(), order_status: order.order_status || 'מחכה למקדמה', payment_status: order.payment_status || 'לא שולם', sale_price: order.sale_price ?? 0, deposit_amount: order.deposit_amount ?? 0, balance_due: order.balance_due ?? 0, total_cost: order.total_cost ?? 0, net_profit: order.net_profit ?? 0, profit_margin: order.profit_margin ?? 0, created_at: '', updated_at: '' } as Order
   const { data, error } = await supabase.from('orders').upsert(order).select().single()
   if (error) throw error
   return data as Order
@@ -270,16 +270,89 @@ export async function getCustomerFull(id: string): Promise<Customer> {
   if (IS_DEMO) {
     const c = demoCustomers.find(c => c.id === id)
     if (!c) throw new Error('Customer not found')
-    const leads = demoLeads.filter(l => l.customer_id === c.id).map(l => ({ ...l, created_at: '', updated_at: '' }))
-    const quotes = demoQuotes.filter(q => q.customer_id === c.id).map(q => ({ ...q, created_at: '', updated_at: '' }))
+    // Only show leads that converted to orders
+    const convertedLeads = demoLeads.filter(l => l.customer_id === c.id && l.order_id).map(l => ({ ...l, created_at: '', updated_at: '' }))
     const orders = demoOrders.filter(o => o.customer_id === c.id).map(o => ({ ...o, created_at: '', updated_at: '' }))
-    return { ...c, created_at: '', updated_at: '', leads, quotes, orders }
+    return { ...c, created_at: '', updated_at: '', converted_leads: convertedLeads, orders }
   }
   const { data, error } = await supabase
     .from('customers')
-    .select('*, leads(*), quotes(*), orders(*)')
+    .select('*, orders(*), converted_leads:leads!inner(customer_id, order_id)')
     .eq('id', id)
     .single()
+  if (error) {
+    // fallback without inner join
+    const { data: d2, error: e2 } = await supabase.from('customers').select('*, orders(*)').eq('id', id).single()
+    if (e2) throw e2
+    const { data: leads } = await supabase.from('leads').select('*').eq('customer_id', id).not('order_id', 'is', null)
+    return { ...(d2 as Customer), converted_leads: (leads || []) as Lead[] }
+  }
+  return data as Customer
+}
+
+// ─── Tasks ────────────────────────────────────────────────────────────────────
+
+export async function getTasks(): Promise<Task[]> {
+  if (IS_DEMO) return []
+  const { data, error } = await supabase
+    .from('tasks')
+    .select('*')
+    .order('due_date', { ascending: true })
+  if (error) throw error
+  return data as Task[]
+}
+
+export async function upsertTask(task: Partial<Task>): Promise<Task> {
+  if (IS_DEMO) return { ...task, id: task.id || crypto.randomUUID(), status: task.status || 'פתוח', priority: task.priority || 'בינוני', title: task.title || '', created_at: '' } as Task
+  const { data, error } = await supabase.from('tasks').upsert(task).select().single()
+  if (error) throw error
+  return data as Task
+}
+
+// ─── Customer stats refresh ───────────────────────────────────────────────────
+
+export async function refreshCustomerStats(customerId: string): Promise<Customer> {
+  if (IS_DEMO) {
+    const c = demoCustomers.find(c => c.id === customerId)
+    if (!c) throw new Error('Customer not found')
+    const orders = demoOrders.filter(o => o.customer_id === customerId && o.order_status !== 'בוטל')
+    const ordersCount = orders.length
+    const totalRevenue = orders.reduce((s, o) => s + o.sale_price, 0)
+    const totalProfit = orders.reduce((s, o) => s + o.net_profit, 0)
+    const avgOrderValue = ordersCount > 0 ? totalRevenue / ordersCount : 0
+    let status = 'לקוח חדש'
+    if (totalRevenue >= 10000 || ordersCount >= 3) status = 'VIP'
+    else if (ordersCount > 1) status = 'לקוח חוזר'
+    return { ...c, created_at: '', updated_at: '', orders_count: ordersCount, total_revenue: totalRevenue, total_profit: totalProfit, average_order_value: avgOrderValue, customer_status: status }
+  }
+  const { data: orders, error: oErr } = await supabase
+    .from('orders')
+    .select('sale_price, net_profit, created_at, order_status')
+    .eq('customer_id', customerId)
+    .neq('order_status', 'בוטל')
+  if (oErr) throw oErr
+
+  const validOrders = orders || []
+  const ordersCount = validOrders.length
+  const totalRevenue = validOrders.reduce((s, o) => s + o.sale_price, 0)
+  const totalProfit = validOrders.reduce((s, o) => s + o.net_profit, 0)
+  const avgOrderValue = ordersCount > 0 ? totalRevenue / ordersCount : 0
+  const dates = validOrders.map(o => o.created_at).sort()
+  let status = 'לקוח חדש'
+  if (totalRevenue >= 10000 || ordersCount >= 3) status = 'VIP'
+  else if (ordersCount > 1) status = 'לקוח חוזר'
+
+  const updates: Partial<Customer> = {
+    id: customerId,
+    orders_count: ordersCount,
+    total_revenue: totalRevenue,
+    total_profit: totalProfit,
+    average_order_value: avgOrderValue,
+    first_order_date: dates[0] || undefined,
+    last_order_date: dates[dates.length - 1] || undefined,
+    customer_status: status,
+  }
+  const { data, error } = await supabase.from('customers').upsert(updates).select().single()
   if (error) throw error
   return data as Customer
 }
@@ -312,7 +385,7 @@ export async function getDashboardMetrics(): Promise<DashboardMetrics> {
     .reduce((s, o) => s + o.balance_due, 0)
 
   const upcomingDeliveries = orders.filter(o => {
-    if (!o.delivery_date || ['נמסר', 'בוטל'].includes(o.order_status)) return false
+    if (!o.delivery_date || ['הושלם', 'בוטל'].includes(o.order_status)) return false
     const d = new Date(o.delivery_date)
     return d >= now && d <= twoWeeksAhead
   }).length
@@ -321,10 +394,15 @@ export async function getDashboardMetrics(): Promise<DashboardMetrics> {
     monthlyRevenue,
     monthlyExpenses,
     monthlyProfit: monthlyRevenue - monthlyExpenses,
-    openOrders: orders.filter(o => !['נמסר', 'בוטל'].includes(o.order_status)).length,
+    openOrders: orders.filter(o => !['הושלם', 'בוטל'].includes(o.order_status)).length,
     openQuotes: quotes.filter(q => !['אושרה', 'נדחתה', 'פג תוקף'].includes(q.quote_status)).length,
-    newLeads: leads.filter(l => !['הומר', 'נסגר'].includes(l.lead_status)).length,
+    activeLeads: leads.filter(l => !['נסגר להזמנה', 'לא רלוונטי'].includes(l.lead_status)).length,
+    waitingForDetails: leads.filter(l => l.lead_status === 'מחכה לפרטים').length,
     unpaidBalance,
     upcomingDeliveries,
+    realCustomers: 0,
+    repeatCustomers: 0,
+    waitingForDeposit: orders.filter(o => o.order_status === 'מחכה למקדמה').length,
+    inProduction: orders.filter(o => o.order_status === 'בייצור' || o.order_status === 'הועבר לייצור').length,
   }
 }

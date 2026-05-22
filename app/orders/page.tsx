@@ -15,7 +15,7 @@ import { useToast } from '@/components/ui/toast'
 import { useDebounce, useTableSort } from '@/lib/hooks'
 import { formatCurrency, formatDate, daysUntil, exportCsv } from '@/lib/utils'
 import { getOrders, upsertOrder, deleteOrder, getCustomers, getSuppliers } from '@/lib/data'
-import { ORDER_STATUSES } from '@/lib/constants'
+import { ORDER_STATUSES, CLOSED_ORDER_STATUSES } from '@/lib/constants'
 import type { Order, Customer, Supplier } from '@/lib/types'
 import Link from 'next/link'
 import { Plus, Search, Pencil, Trash2, AlertTriangle, Download, Eye } from 'lucide-react'
@@ -172,7 +172,7 @@ export default function OrdersPage() {
                 )}
                 {sorted.map(order => {
                   const days = daysUntil(order.delivery_date)
-                  const isUrgent = days !== null && days <= 3 && !['נמסר', 'בוטל'].includes(order.order_status)
+                  const isUrgent = days !== null && days <= 3 && !CLOSED_ORDER_STATUSES.has(order.order_status)
                   return (
                     <TableRow key={order.id}>
                       <TableCell><span className="font-mono text-sm font-medium text-[#b8934a]">{order.order_number}</span></TableCell>

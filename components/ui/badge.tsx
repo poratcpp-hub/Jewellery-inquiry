@@ -34,10 +34,21 @@ export function getStatusBadgeVariant(status: string): BadgeProps['variant'] {
   const map: Record<string, BadgeProps['variant']> = {
     // Customer
     'VIP': 'gold',
+    'לקוח חוזר': 'success',
+    'לקוח חדש': 'default',
+    'לא פעיל': 'outline',
     'פעיל': 'success',
     'חדש': 'secondary',
-    'לא פעיל': 'outline',
-    // Lead
+    // Lead statuses
+    'צריך מענה ראשוני': 'destructive',
+    'מחכה לפרטים': 'warning',
+    'מוכן להצעת מחיר': 'success',
+    'נשלחה הצעת מחיר': 'default',
+    'פולואפ ראשון': 'warning',
+    'פולואפ שני': 'warning',
+    'לקוח לא מגיב': 'outline',
+    'נסגר להזמנה': 'success',
+    'לא רלוונטי': 'outline',
     'בטיפול': 'warning',
     'ממתין': 'secondary',
     'הומר': 'success',
@@ -45,17 +56,25 @@ export function getStatusBadgeVariant(status: string): BadgeProps['variant'] {
     // Quote
     'טיוטה': 'secondary',
     'נשלחה': 'warning',
+    'נשלחה ללקוח': 'warning',
     'אושרה': 'success',
     'נדחתה': 'destructive',
     'פג תוקף': 'outline',
     // Order
+    'מחכה למקדמה': 'warning',
+    'מקדמה התקבלה': 'default',
+    'הועבר לייצור': 'default',
     'הזמנה חדשה': 'default',
     'בייצור': 'warning',
+    'מוכן למסירה': 'success',
+    'מחכה לתשלום יתרה': 'warning',
+    'הושלם': 'success',
     'מוכן': 'success',
     'נמסר': 'outline',
     'בוטל': 'destructive',
     // Payment
     'לא שולם': 'destructive',
+    'שולמה מקדמה': 'warning',
     'שולם חלקית': 'warning',
     'שולם במלואו': 'success',
     // Priority

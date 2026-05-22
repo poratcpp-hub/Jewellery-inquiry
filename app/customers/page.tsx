@@ -12,11 +12,11 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { TableSkeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
 import { useDebounce, useTableSort } from '@/lib/hooks'
-import { formatDate, exportCsv, generateQuoteNumber } from '@/lib/utils'
-import { getCustomers, upsertCustomer, deleteCustomer, upsertLead, upsertQuote } from '@/lib/data'
+import { formatDate, exportCsv } from '@/lib/utils'
+import { getCustomers, upsertCustomer, deleteCustomer } from '@/lib/data'
 import type { Customer } from '@/lib/types'
 import Link from 'next/link'
-import { Plus, Search, Pencil, Trash2, Phone, AtSign, Download, ClipboardList, Eye } from 'lucide-react'
+import { Plus, Search, Pencil, Trash2, Phone, AtSign, Download, Eye } from 'lucide-react'
 
 function WaLink({ phone }: { phone: string }) {
   const normalized = phone.replace(/^0/, '').replace(/\D/g, '')
@@ -94,38 +94,7 @@ export default function CustomersPage() {
     }
 
     setCustomers(prev => [saved, ...prev])
-
-    // Auto-open lead + quote for every new customer — separate try/catch so
-    // a Supabase / RLS failure here doesn't swallow the customer success.
-    try {
-      const [, newQuote] = await Promise.all([
-        upsertLead({
-          full_name: saved.full_name,
-          phone: saved.phone,
-          source: saved.source,
-          customer_id: saved.id,
-          lead_status: 'חדש',
-          priority: 'בינוני',
-        }),
-        upsertQuote({
-          quote_number: generateQuoteNumber(),
-          customer_id: saved.id,
-          quote_status: 'טיוטה',
-          diamond_cost: 0, gold_cost: 0, labor_cost: 0,
-          setting_cost: 0, packaging_cost: 0, shipping_cost: 0, other_cost: 0,
-          total_cost: 0, sale_price: 0, expected_profit: 0, profit_margin: 0,
-        }),
-      ])
-      toast({
-        type: 'info',
-        title: `נפתחו אוטומטית עבור "${saved.full_name}"`,
-        description: `ליד חדש + הצעת מחיר ${newQuote.quote_number} — יש למלא את הפרטים`,
-      })
-    } catch (err) {
-      console.error('Auto-create lead/quote failed:', err)
-      toast({ type: 'warning', title: 'הלקוח נוסף', description: 'לא הצלחנו לפתוח ליד/הצעת מחיר אוטומטית' })
-    }
-
+    toast({ type: 'success', title: `הלקוח "${saved.full_name}" נוסף` })
     setEditing(undefined)
   }, [editing, customers, toast])
 
@@ -152,27 +121,6 @@ export default function CustomersPage() {
       סטטוס: c.customer_status,
     })))
   }, [sorted])
-
-  const openLeadForCustomer = useCallback(async (customer: Customer) => {
-    try {
-      await upsertLead({
-        full_name: customer.full_name,
-        phone: customer.phone,
-        source: customer.source,
-        customer_id: customer.id,
-        lead_status: 'חדש',
-        priority: 'בינוני',
-      })
-      toast({
-        type: 'info',
-        title: `ליד נפתח עבור "${customer.full_name}"`,
-        description: 'הליד נוסף לרשימת הלידים — יש למלא את הפרטים',
-      })
-    } catch (err) {
-      console.error('Open lead failed:', err)
-      toast({ type: 'error', title: 'שגיאה בפתיחת ליד' })
-    }
-  }, [toast])
 
   const openEdit = useCallback((c: Customer) => { setEditing(c); setFormOpen(true) }, [])
   const openNew = useCallback(() => { setEditing(undefined); setFormOpen(true) }, [])
@@ -253,8 +201,7 @@ export default function CustomersPage() {
                       <div className="flex items-center gap-1">
                         <Link href={`/customers/${customer.id}`}><Button variant="ghost" size="icon" title="פרופיל"><Eye size={15} /></Button></Link>
                         <Button variant="ghost" size="icon" onClick={() => openEdit(customer)} title="עריכה"><Pencil size={15} /></Button>
-                        <Button variant="ghost" size="icon" onClick={() => openLeadForCustomer(customer)} title="פתח ליד" className="text-[#b8934a] hover:text-[#a07840] hover:bg-[#fdf6ec]"><ClipboardList size={15} /></Button>
-                        <Button variant="ghost" size="icon" onClick={() => setDeleteTarget(customer)} title="מחיקה" className="text-red-500 hover:text-red-700 hover:bg-red-50"><Trash2 size={15} /></Button>
+<Button variant="ghost" size="icon" onClick={() => setDeleteTarget(customer)} title="מחיקה" className="text-red-500 hover:text-red-700 hover:bg-red-50"><Trash2 size={15} /></Button>
                       </div>
                     </TableCell>
                   </TableRow>

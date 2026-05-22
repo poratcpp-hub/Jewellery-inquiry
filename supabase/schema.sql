@@ -266,3 +266,92 @@ alter table customers add column if not exists total_purchases numeric default 0
 alter table customers add column if not exists total_profit numeric default 0;
 alter table customers add column if not exists orders_count integer default 0;
 alter table quotes add column if not exists estimated_delivery_time text;
+
+-- Phase 3: Lead ≠ Customer architecture
+-- Customers: new status default + calculated stat fields
+alter table customers alter column customer_status set default 'לקוח חדש';
+alter table customers add column if not exists total_revenue numeric default 0;
+alter table customers add column if not exists average_order_value numeric default 0;
+alter table customers add column if not exists first_order_date date;
+alter table customers add column if not exists last_order_date date;
+
+-- Leads: link to quote and order (set only after conversion)
+alter table leads add column if not exists quote_id uuid references quotes(id) on delete set null;
+alter table leads add column if not exists order_id uuid references orders(id) on delete set null;
+
+-- Quotes: link back to order when converted
+alter table quotes add column if not exists order_id uuid references orders(id) on delete set null;
+
+-- Orders: new status default + back-links
+alter table orders alter column order_status set default 'מחכה למקדמה';
+alter table orders add column if not exists lead_id uuid references leads(id) on delete set null;
+alter table orders add column if not exists carat numeric;
+alter table orders add column if not exists production_notes text;
+
+-- Tasks: extended fields
+alter table tasks add column if not exists task_type text;
+alter table tasks add column if not exists completed_at timestamptz;
+alter table tasks add column if not exists customer_id uuid references customers(id) on delete set null;
+
+-- Activity log for audit trail
+create table if not exists activity_logs (
+  id uuid primary key default gen_random_uuid(),
+  related_type text not null,
+  related_id uuid not null,
+  customer_id uuid references customers(id) on delete set null,
+  action text not null,
+  description text,
+  created_at timestamptz default now()
+);
+alter table activity_logs enable row level security;
+do $$ begin
+  if not exists (select 1 from pg_policies where policyname = 'allow_all_activity_logs' and tablename = 'activity_logs') then
+    create policy "allow_all_activity_logs" on activity_logs for all using (true) with check (true); end if;
+end $$;
+
+-- refreshCustomerStats function
+create or replace function refresh_customer_stats(p_customer_id uuid)
+returns void as $$
+declare
+  v_orders_count integer;
+  v_total_revenue numeric;
+  v_total_profit numeric;
+  v_avg_order numeric;
+  v_first_order date;
+  v_last_order date;
+  v_new_status text;
+begin
+  select
+    count(*),
+    coalesce(sum(sale_price), 0),
+    coalesce(sum(net_profit), 0),
+    case when count(*) > 0 then coalesce(sum(sale_price), 0) / count(*) else 0 end,
+    min(created_at::date),
+    max(created_at::date)
+  into v_orders_count, v_total_revenue, v_total_profit, v_avg_order, v_first_order, v_last_order
+  from orders
+  where customer_id = p_customer_id
+    and order_status not in ('בוטל');
+
+  if v_total_revenue >= 10000 or v_orders_count >= 3 then
+    v_new_status := 'VIP';
+  elsif v_orders_count > 1 then
+    v_new_status := 'לקוח חוזר';
+  elsif v_orders_count = 1 then
+    v_new_status := 'לקוח חדש';
+  else
+    v_new_status := 'לא פעיל';
+  end if;
+
+  update customers set
+    orders_count = v_orders_count,
+    total_revenue = v_total_revenue,
+    total_profit = v_total_profit,
+    average_order_value = v_avg_order,
+    first_order_date = v_first_order,
+    last_order_date = v_last_order,
+    customer_status = v_new_status,
+    updated_at = now()
+  where id = p_customer_id;
+end;
+$$ language plpgsql;
