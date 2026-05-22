@@ -185,27 +185,41 @@ export async function getOrders(): Promise<Order[]> {
 
 export async function upsertOrder(order: Partial<Order>): Promise<Order> {
   if (IS_DEMO) return { ...order, id: order.id || crypto.randomUUID(), order_status: order.order_status || 'מחכה למקדמה', payment_status: order.payment_status || 'לא שולם', sale_price: order.sale_price ?? 0, deposit_amount: order.deposit_amount ?? 0, balance_due: order.balance_due ?? 0, total_cost: order.total_cost ?? 0, net_profit: order.net_profit ?? 0, profit_margin: order.profit_margin ?? 0, created_at: '', updated_at: '' } as Order
-  // Strip all relation/joined fields that are not DB columns
-  const { customers: _c, suppliers: _s, quotes: _q, payments: _p, expenses: _e, ...rest } = order as Order & { customers?: unknown; suppliers?: unknown; quotes?: unknown; payments?: unknown; expenses?: unknown }
-  const sanitized = {
-    ...rest,
-    // Convert empty string UUIDs to null
-    customer_id: rest.customer_id || null,
-    supplier_id: rest.supplier_id || null,
-    quote_id: rest.quote_id || null,
-    lead_id: rest.lead_id || null,
-    // Convert empty string dates to null
-    delivery_date: rest.delivery_date || null,
-    // Ensure numeric fields are numbers
-    sale_price: Number(rest.sale_price ?? 0),
-    deposit_amount: Number(rest.deposit_amount ?? 0),
-    balance_due: Number(rest.balance_due ?? 0),
-    total_cost: Number(rest.total_cost ?? 0),
-    net_profit: Number(rest.net_profit ?? 0),
-    profit_margin: Number(rest.profit_margin ?? 0),
-    carat: rest.carat != null ? Number(rest.carat) : null,
+  // Explicit whitelist — only base schema columns. Never spread unknown fields.
+  const payload: Record<string, unknown> = {
+    order_number: order.order_number,
+    customer_id: order.customer_id || null,
+    supplier_id: order.supplier_id || null,
+    quote_id: order.quote_id || null,
+    jewelry_type: order.jewelry_type || null,
+    description: order.description || null,
+    diamond_type: order.diamond_type || null,
+    diamond_origin: order.diamond_origin || null,
+    diamond_certificate: order.diamond_certificate || null,
+    gold_type: order.gold_type || null,
+    gold_color: order.gold_color || null,
+    size: order.size || null,
+    engraving: order.engraving || null,
+    order_status: order.order_status || 'מחכה למקדמה',
+    production_status: order.production_status || null,
+    sale_price: Number(order.sale_price ?? 0),
+    deposit_amount: Number(order.deposit_amount ?? 0),
+    balance_due: Number(order.balance_due ?? 0),
+    total_cost: Number(order.total_cost ?? 0),
+    net_profit: Number(order.net_profit ?? 0),
+    profit_margin: Number(order.profit_margin ?? 0),
+    payment_status: order.payment_status || 'לא שולם',
+    delivery_date: order.delivery_date || null,
+    notes: order.notes || null,
   }
-  const { data, error } = await supabase.from('orders').upsert(sanitized).select().single()
+  // Include id only for updates (new rows get a DB-generated uuid)
+  if (order.id) payload.id = order.id
+  // Phase 3 columns — skip entirely if undefined so missing-column errors don't occur
+  if (order.lead_id !== undefined) payload.lead_id = order.lead_id || null
+  if (order.carat !== undefined) payload.carat = Number(order.carat)
+  if (order.production_notes !== undefined) payload.production_notes = order.production_notes || null
+
+  const { data, error } = await supabase.from('orders').upsert(payload).select().single()
   if (error) { console.error('[upsertOrder] Supabase error:', error); throw error }
   return data as Order
 }
