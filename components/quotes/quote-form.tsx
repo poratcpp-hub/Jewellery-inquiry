@@ -9,6 +9,7 @@ import { Select } from '@/components/ui/select'
 import { FormField, FormGrid, FormSection } from '@/components/ui/form-field'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { calculateQuoteCosts, formatCurrency, generateQuoteNumber, getProfitColor } from '@/lib/utils'
+import { QUOTE_STATUSES } from '@/lib/constants'
 import type { Quote, Customer } from '@/lib/types'
 import { cn } from '@/lib/utils'
 
@@ -29,7 +30,6 @@ const GOLD_COLOR_OPTIONS = ['צהוב', 'לבן', 'ורוד']
 const COLOR_OPTIONS = ['D', 'E', 'F', 'G', 'H', 'I', 'J', 'K']
 const CLARITY_OPTIONS = ['FL', 'IF', 'VVS1', 'VVS2', 'VS1', 'VS2', 'SI1', 'SI2', 'I1']
 const CUT_OPTIONS = ['Excellent', 'Very Good', 'Good', 'Fair']
-const STATUS_OPTIONS = ['טיוטה', 'נשלחה', 'אושרה', 'נדחתה', 'פג תוקף']
 
 const COST_FIELDS = [
   { key: 'diamond_cost', label: 'עלות יהלום' },
@@ -113,7 +113,7 @@ export function QuoteForm({ open, onClose, quote, customers, onSave }: QuoteForm
               </FormField>
               <FormField label="סטטוס" htmlFor="quote_status">
                 <Select id="quote_status" value={form.quote_status || 'טיוטה'} onChange={e => set('quote_status', e.target.value)}>
-                  {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+                  {QUOTE_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
                 </Select>
               </FormField>
             </FormGrid>

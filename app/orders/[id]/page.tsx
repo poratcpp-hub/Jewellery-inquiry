@@ -120,7 +120,7 @@ export default function OrderDetailPage() {
   )
 
   const daysLeft = order.delivery_date ? daysUntil(order.delivery_date) : null
-  const isUrgent = daysLeft !== null && daysLeft <= 3 && !['נמסר', 'בוטל'].includes(order.order_status)
+  const isUrgent = daysLeft !== null && daysLeft <= 3 && !['הושלם', 'בוטל'].includes(order.order_status)
   const payments = order.payments || []
   const expenses = order.expenses || []
   const totalPaid = payments.filter(p => p.is_paid).reduce((s, p) => s + p.amount, 0)
@@ -229,7 +229,7 @@ export default function OrderDetailPage() {
             <Calendar size={18} className={isUrgent ? 'text-red-600' : 'text-[#7a6a52]'} />
             <div>
               <p className="text-sm font-medium text-[#2c1810]">תאריך מסירה: {formatDate(order.delivery_date)}</p>
-              {daysLeft !== null && !['נמסר', 'בוטל'].includes(order.order_status) && (
+              {daysLeft !== null && !['הושלם', 'בוטל'].includes(order.order_status) && (
                 <p className={cn('text-xs', isUrgent ? 'text-red-600' : 'text-[#7a6a52]')}>
                   {daysLeft === 0 ? 'מסירה היום' : daysLeft > 0 ? `בעוד ${daysLeft} ימים` : `${Math.abs(daysLeft)} ימים באיחור`}
                 </p>

@@ -166,11 +166,22 @@ export async function upsertQuote(quote: Partial<Quote>): Promise<Quote> {
   if (IS_DEMO) return { ...quote, id: quote.id || crypto.randomUUID(), quote_status: quote.quote_status || 'טיוטה', diamond_cost: quote.diamond_cost ?? 0, gold_cost: quote.gold_cost ?? 0, labor_cost: quote.labor_cost ?? 0, setting_cost: quote.setting_cost ?? 0, packaging_cost: quote.packaging_cost ?? 0, shipping_cost: quote.shipping_cost ?? 0, other_cost: quote.other_cost ?? 0, total_cost: quote.total_cost ?? 0, sale_price: quote.sale_price ?? 0, expected_profit: quote.expected_profit ?? 0, profit_margin: quote.profit_margin ?? 0, created_at: '', updated_at: '' } as Quote
   // Strip relation/joined fields that are not DB columns
   const { customers: _c, leads: _l, ...rest } = quote as Quote & { customers?: unknown; leads?: unknown }
-  const sanitized = {
-    ...rest,
+  // Explicit whitelist — only base schema columns
+  const payload: Record<string, unknown> = {
+    quote_number: rest.quote_number,
     customer_id: rest.customer_id || null,
     lead_id: rest.lead_id || null,
-    order_id: rest.order_id || null,
+    jewelry_type: rest.jewelry_type || null,
+    description: rest.description || null,
+    diamond_type: rest.diamond_type || null,
+    diamond_origin: rest.diamond_origin || null,
+    diamond_certificate: rest.diamond_certificate || null,
+    gold_type: rest.gold_type || null,
+    gold_color: rest.gold_color || null,
+    carat: rest.carat !== undefined ? rest.carat : undefined,
+    diamond_color: rest.diamond_color || null,
+    diamond_clarity: rest.diamond_clarity || null,
+    diamond_cut: rest.diamond_cut || null,
     // Ensure numeric fields are numbers
     diamond_cost: Number(rest.diamond_cost ?? 0),
     gold_cost: Number(rest.gold_cost ?? 0),
@@ -183,8 +194,19 @@ export async function upsertQuote(quote: Partial<Quote>): Promise<Quote> {
     sale_price: Number(rest.sale_price ?? 0),
     expected_profit: Number(rest.expected_profit ?? 0),
     profit_margin: Number(rest.profit_margin ?? 0),
+    quote_status: rest.quote_status || 'טיוטה',
+    valid_until: rest.valid_until || null,
+    estimated_delivery_time: rest.estimated_delivery_time || null,
+    notes: rest.notes || null,
   }
-  const { data, error } = await supabase.from('quotes').upsert(sanitized).select().single()
+  // Remove undefined values so existing DB rows are not overwritten with null
+  Object.keys(payload).forEach(k => payload[k] === undefined && delete payload[k])
+  // Include id only for updates
+  if (rest.id) payload.id = rest.id
+  // Phase 3 column — skip entirely if undefined so missing-column errors don't occur
+  if (rest.order_id !== undefined) payload.order_id = rest.order_id || null
+
+  const { data, error } = await supabase.from('quotes').upsert(payload).select().single()
   if (error) { console.error('[upsertQuote] Supabase error:', error); throw error }
   return data as Quote
 }
