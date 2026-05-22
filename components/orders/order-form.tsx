@@ -9,6 +9,7 @@ import { Select } from '@/components/ui/select'
 import { FormField, FormGrid, FormSection } from '@/components/ui/form-field'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { calculateOrderFinancials, formatCurrency, generateOrderNumber, getProfitColor } from '@/lib/utils'
+import { ORDER_STATUSES, PAYMENT_STATUSES, PRODUCTION_STATUSES, JEWELRY_TYPES, GOLD_TYPES, GOLD_COLORS, DIAMOND_TYPES, DIAMOND_ORIGINS, DIAMOND_CERTIFICATES } from '@/lib/constants'
 import type { Order, Customer, Supplier } from '@/lib/types'
 import { cn } from '@/lib/utils'
 
@@ -21,19 +22,9 @@ interface OrderFormProps {
   onSave: (data: Partial<Order>) => void
 }
 
-const JEWELRY_OPTIONS = ['טבעת אירוסין', 'טבעת נישואין', 'עגילים', 'שרשרת', 'צמיד', 'תליון', 'אחר']
-const GOLD_OPTIONS = ['14K', '18K', '9K']
-const GOLD_COLOR_OPTIONS = ['צהוב', 'לבן', 'ורוד']
-const DIAMOND_OPTIONS = ['Round', 'Princess', 'Oval', 'Cushion', 'Marquise', 'Emerald', 'Pear', 'Radiant', 'Asscher', 'Heart', 'ללא', 'אחר']
-const DIAMOND_ORIGIN_OPTIONS = ['טבעי', 'מעבדה']
-const CERTIFICATE_OPTIONS = ['GIA', 'IGI', 'SGL', 'GGL', 'ללא תעודה']
-const ORDER_STATUS_OPTIONS = ['הזמנה חדשה', 'בייצור', 'מוכן', 'נמסר', 'בוטל']
-const PRODUCTION_STATUS_OPTIONS = ['הזמנת חומרים', 'הזמנת יהלום', 'בייצור', 'שיבוץ', 'ליטוש', 'הושלם']
-const PAYMENT_STATUS_OPTIONS = ['לא שולם', 'שולם חלקית', 'שולם במלואו']
-
 const makeDefaults = (): Partial<Order> => ({
   order_number: generateOrderNumber(),
-  order_status: 'הזמנה חדשה',
+  order_status: 'מחכה למקדמה',
   payment_status: 'לא שולם',
   sale_price: 0,
   deposit_amount: 0,
@@ -107,37 +98,37 @@ export function OrderForm({ open, onClose, order, customers, suppliers, onSave }
               <FormField label="סוג תכשיט" htmlFor="jewelry_type">
                 <Select id="jewelry_type" value={form.jewelry_type || ''} onChange={e => set('jewelry_type', e.target.value)}>
                   <option value="">בחר</option>
-                  {JEWELRY_OPTIONS.map(j => <option key={j} value={j}>{j}</option>)}
+                  {JEWELRY_TYPES.map(j => <option key={j} value={j}>{j}</option>)}
                 </Select>
               </FormField>
               <FormField label="סוג זהב" htmlFor="gold_type">
                 <Select id="gold_type" value={form.gold_type || ''} onChange={e => set('gold_type', e.target.value)}>
                   <option value="">בחר</option>
-                  {GOLD_OPTIONS.map(g => <option key={g} value={g}>{g}</option>)}
+                  {GOLD_TYPES.map(g => <option key={g} value={g}>{g}</option>)}
                 </Select>
               </FormField>
               <FormField label="צבע זהב" htmlFor="gold_color">
                 <Select id="gold_color" value={form.gold_color || ''} onChange={e => set('gold_color', e.target.value)}>
                   <option value="">בחר</option>
-                  {GOLD_COLOR_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
+                  {GOLD_COLORS.map(c => <option key={c} value={c}>{c}</option>)}
                 </Select>
               </FormField>
               <FormField label="חיתוך (Cut)" htmlFor="diamond_type">
                 <Select id="diamond_type" value={form.diamond_type || ''} onChange={e => set('diamond_type', e.target.value)}>
                   <option value="">בחר</option>
-                  {DIAMOND_OPTIONS.map(d => <option key={d} value={d}>{d}</option>)}
+                  {DIAMOND_TYPES.map(d => <option key={d} value={d}>{d}</option>)}
                 </Select>
               </FormField>
               <FormField label="מקור יהלום" htmlFor="diamond_origin">
                 <Select id="diamond_origin" value={form.diamond_origin || ''} onChange={e => set('diamond_origin', e.target.value)}>
                   <option value="">בחר</option>
-                  {DIAMOND_ORIGIN_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+                  {DIAMOND_ORIGINS.map(o => <option key={o} value={o}>{o}</option>)}
                 </Select>
               </FormField>
               <FormField label="תעודה" htmlFor="diamond_certificate">
                 <Select id="diamond_certificate" value={form.diamond_certificate || ''} onChange={e => set('diamond_certificate', e.target.value)}>
                   <option value="">בחר</option>
-                  {CERTIFICATE_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
+                  {DIAMOND_CERTIFICATES.map(c => <option key={c} value={c}>{c}</option>)}
                 </Select>
               </FormField>
               <FormField label="מידה" htmlFor="size">
@@ -152,19 +143,19 @@ export function OrderForm({ open, onClose, order, customers, suppliers, onSave }
           <FormSection title="סטטוס">
             <FormGrid cols={3}>
               <FormField label="סטטוס הזמנה" htmlFor="order_status">
-                <Select id="order_status" value={form.order_status || 'הזמנה חדשה'} onChange={e => set('order_status', e.target.value)}>
-                  {ORDER_STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+                <Select id="order_status" value={form.order_status || 'מחכה למקדמה'} onChange={e => set('order_status', e.target.value)}>
+                  {ORDER_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
                 </Select>
               </FormField>
               <FormField label="שלב ייצור" htmlFor="production_status">
                 <Select id="production_status" value={form.production_status || ''} onChange={e => set('production_status', e.target.value)}>
                   <option value="">בחר שלב</option>
-                  {PRODUCTION_STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+                  {PRODUCTION_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
                 </Select>
               </FormField>
               <FormField label="סטטוס תשלום" htmlFor="payment_status">
                 <Select id="payment_status" value={form.payment_status || 'לא שולם'} onChange={e => set('payment_status', e.target.value)}>
-                  {PAYMENT_STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+                  {PAYMENT_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
                 </Select>
               </FormField>
               <FormField label="תאריך מסירה" htmlFor="delivery_date">
