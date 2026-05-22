@@ -64,13 +64,37 @@ export async function upsertLead(lead: Partial<Lead>): Promise<Lead> {
   if (IS_DEMO) return { ...lead, id: lead.id || crypto.randomUUID(), lead_status: lead.lead_status || 'חדש', priority: lead.priority || 'בינוני', created_at: '', updated_at: '' } as Lead
   // Strip relation/joined fields that are not DB columns
   const { customers: _c, quotes: _q, orders: _o, ...rest } = lead as Lead & { customers?: unknown; quotes?: unknown; orders?: unknown }
-  const sanitized = {
-    ...rest,
+  // Explicit whitelist — only base schema columns
+  const payload: Record<string, unknown> = {
     customer_id: rest.customer_id || null,
-    quote_id: rest.quote_id || null,
-    order_id: rest.order_id || null,
+    full_name: rest.full_name,
+    phone: rest.phone,
+    instagram: rest.instagram,
+    email: rest.email,
+    source: rest.source,
+    jewelry_type: rest.jewelry_type,
+    diamond_type: rest.diamond_type,
+    gold_type: rest.gold_type,
+    gold_color: rest.gold_color,
+    carat: rest.carat !== undefined ? rest.carat : undefined,
+    ring_size: rest.ring_size,
+    desired_style: rest.desired_style,
+    original_message: rest.original_message,
+    budget: rest.budget !== undefined ? rest.budget : undefined,
+    lead_status: rest.lead_status,
+    priority: rest.priority,
+    follow_up_date: rest.follow_up_date,
+    notes: rest.notes,
   }
-  const { data, error } = await supabase.from('leads').upsert(sanitized).select().single()
+  // Remove undefined values so existing DB rows are not overwritten with null
+  Object.keys(payload).forEach(k => payload[k] === undefined && delete payload[k])
+  // Include id only for updates
+  if (rest.id) payload.id = rest.id
+  // Phase 3 columns — skip entirely if undefined so missing-column errors don't occur
+  if (rest.quote_id !== undefined) payload.quote_id = rest.quote_id || null
+  if (rest.order_id !== undefined) payload.order_id = rest.order_id || null
+
+  const { data, error } = await supabase.from('leads').upsert(payload).select().single()
   if (error) { console.error('[upsertLead] Supabase error:', error); throw error }
   return data as Lead
 }
