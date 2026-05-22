@@ -71,7 +71,7 @@ export function LeadForm({ open, onClose, lead, customers = [], onSave }: LeadFo
           <FormSection title="פרטי ליד">
             <FormGrid>
               <FormField label="שם מלא" required error={errors.full_name} htmlFor="full_name">
-                <Input id="full_name" value={form.full_name || ''} onChange={e => set('full_name', e.target.value)} placeholder="שם ומשפחה" />
+                <Input id="full_name" value={form.full_name || ''} onChange={e => set('full_name', e.target.value)} placeholder="שם ומשפחה" error={!!errors.full_name} />
               </FormField>
               <FormField label="טלפון" htmlFor="phone">
                 <Input id="phone" value={form.phone || ''} onChange={e => set('phone', e.target.value)} placeholder="050-0000000" />

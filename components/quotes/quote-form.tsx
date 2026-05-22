@@ -51,12 +51,14 @@ const makeDefaults = (): Partial<Quote> => ({
 
 export function QuoteForm({ open, onClose, quote, customers, onSave }: QuoteFormProps) {
   const [form, setForm] = useState<Partial<Quote>>(quote || makeDefaults())
+  const [errors, setErrors] = useState<Record<string, string>>({})
   const isDirtyRef = useRef(false)
   const [confirmClose, setConfirmClose] = useState(false)
 
   useEffect(() => {
     if (open) {
       setForm(quote || makeDefaults())
+      setErrors({})
       isDirtyRef.current = false
       setConfirmClose(false)
     }
@@ -67,9 +69,19 @@ export function QuoteForm({ open, onClose, quote, customers, onSave }: QuoteForm
   const set = (key: keyof Quote, value: string | number | boolean) => {
     setForm(f => ({ ...f, [key]: value }))
     isDirtyRef.current = true
+    if (errors[key as string]) setErrors(e => ({ ...e, [key]: '' }))
+  }
+
+  const validate = () => {
+    const e: Record<string, string> = {}
+    if (!form.customer_id) e.customer_id = 'יש לבחור לקוח'
+    if (!form.sale_price || form.sale_price <= 0) e.sale_price = 'יש להזין מחיר מכירה'
+    setErrors(e)
+    return Object.keys(e).length === 0
   }
 
   const handleSave = () => {
+    if (!validate()) return
     const calcs = calculateQuoteCosts(form)
     onSave({ ...form, ...calcs })
     onClose()
@@ -93,8 +105,8 @@ export function QuoteForm({ open, onClose, quote, customers, onSave }: QuoteForm
               <FormField label="מספר הצעה" htmlFor="quote_number">
                 <Input id="quote_number" value={form.quote_number || ''} readOnly className="bg-[#faf8f5]" />
               </FormField>
-              <FormField label="לקוח" htmlFor="customer_id">
-                <Select id="customer_id" value={form.customer_id || ''} onChange={e => set('customer_id', e.target.value)}>
+              <FormField label="לקוח" required error={errors.customer_id} htmlFor="customer_id">
+                <Select id="customer_id" value={form.customer_id || ''} onChange={e => set('customer_id', e.target.value)} error={!!errors.customer_id}>
                   <option value="">בחר לקוח</option>
                   {customers.map(c => <option key={c.id} value={c.id}>{c.full_name}</option>)}
                 </Select>
@@ -190,14 +202,15 @@ export function QuoteForm({ open, onClose, quote, customers, onSave }: QuoteForm
                   />
                 </FormField>
               ))}
-              <FormField label="מחיר מכירה" htmlFor="sale_price">
+              <FormField label="מחיר מכירה" required error={errors.sale_price} htmlFor="sale_price">
                 <Input
                   id="sale_price"
                   type="number"
                   value={form.sale_price || ''}
                   onChange={e => set('sale_price', Number(e.target.value))}
                   placeholder="0"
-                  className="border-[#b8934a] focus:ring-[#b8934a]"
+                  className={errors.sale_price ? undefined : 'border-[#b8934a] focus:ring-[#b8934a]'}
+                  error={!!errors.sale_price}
                 />
               </FormField>
             </div>

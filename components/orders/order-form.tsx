@@ -33,12 +33,14 @@ const makeDefaults = (): Partial<Order> => ({
 
 export function OrderForm({ open, onClose, order, customers, suppliers, onSave }: OrderFormProps) {
   const [form, setForm] = useState<Partial<Order>>(order || makeDefaults())
+  const [errors, setErrors] = useState<Record<string, string>>({})
   const isDirtyRef = useRef(false)
   const [confirmClose, setConfirmClose] = useState(false)
 
   useEffect(() => {
     if (open) {
       setForm(order || makeDefaults())
+      setErrors({})
       isDirtyRef.current = false
       setConfirmClose(false)
     }
@@ -49,9 +51,19 @@ export function OrderForm({ open, onClose, order, customers, suppliers, onSave }
   const set = (key: keyof Order, value: string | number) => {
     setForm(f => ({ ...f, [key]: value }))
     isDirtyRef.current = true
+    if (errors[key as string]) setErrors(e => ({ ...e, [key]: '' }))
+  }
+
+  const validate = () => {
+    const e: Record<string, string> = {}
+    if (!form.customer_id) e.customer_id = 'יש לבחור לקוח'
+    if (!form.sale_price || form.sale_price <= 0) e.sale_price = 'יש להזין מחיר מכירה'
+    setErrors(e)
+    return Object.keys(e).length === 0
   }
 
   const handleSave = () => {
+    if (!validate()) return
     const calcs = calculateOrderFinancials(form)
     onSave({ ...form, ...calcs })
     onClose()
@@ -75,8 +87,8 @@ export function OrderForm({ open, onClose, order, customers, suppliers, onSave }
               <FormField label="מספר הזמנה" htmlFor="order_number">
                 <Input id="order_number" value={form.order_number || ''} readOnly className="bg-[#faf8f5]" />
               </FormField>
-              <FormField label="לקוח" htmlFor="customer_id">
-                <Select id="customer_id" value={form.customer_id || ''} onChange={e => set('customer_id', e.target.value)}>
+              <FormField label="לקוח" required error={errors.customer_id} htmlFor="customer_id">
+                <Select id="customer_id" value={form.customer_id || ''} onChange={e => set('customer_id', e.target.value)} error={!!errors.customer_id}>
                   <option value="">בחר לקוח</option>
                   {customers.map(c => <option key={c.id} value={c.id}>{c.full_name}</option>)}
                 </Select>
@@ -166,8 +178,8 @@ export function OrderForm({ open, onClose, order, customers, suppliers, onSave }
 
           <FormSection title="פיננסי">
             <FormGrid cols={3}>
-              <FormField label="מחיר מכירה (₪)" htmlFor="sale_price">
-                <Input id="sale_price" type="number" value={form.sale_price || ''} onChange={e => set('sale_price', Number(e.target.value))} placeholder="0" />
+              <FormField label="מחיר מכירה (₪)" required error={errors.sale_price} htmlFor="sale_price">
+                <Input id="sale_price" type="number" value={form.sale_price || ''} onChange={e => set('sale_price', Number(e.target.value))} placeholder="0" error={!!errors.sale_price} />
               </FormField>
               <FormField label="מקדמה (₪)" htmlFor="deposit_amount">
                 <Input id="deposit_amount" type="number" value={form.deposit_amount || ''} onChange={e => set('deposit_amount', Number(e.target.value))} placeholder="0" />

@@ -78,6 +78,7 @@ export function CustomerForm({ open, onClose, customer, onSave }: CustomerFormPr
                 value={form.full_name || ''}
                 onChange={e => set('full_name', e.target.value)}
                 placeholder="שם ומשפחה"
+                error={!!errors.full_name}
               />
             </FormField>
             <FormGrid>
