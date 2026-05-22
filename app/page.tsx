@@ -215,7 +215,15 @@ export default function DashboardPage() {
       ]
       results.forEach(({ name, r }) => {
         if (r.status === 'rejected') {
-          console.error(`[Dashboard] query "${name}" failed:`, r.reason)
+          const err = r.reason as { message?: string; code?: string; details?: string; hint?: string; status?: number } | undefined
+          console.error(
+            `[Dashboard] query "${name}" failed` +
+            ` | message: ${err?.message ?? String(r.reason)}` +
+            ` | code: ${err?.code ?? '—'}` +
+            ` | status: ${err?.status ?? '—'}` +
+            ` | details: ${err?.details ?? '—'}` +
+            ` | hint: ${err?.hint ?? '—'}`
+          )
         }
       })
 

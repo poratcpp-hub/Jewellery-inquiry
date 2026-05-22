@@ -43,7 +43,20 @@ export default function LoginPage() {
         password,
       })
       if (authError) {
-        setError('אימייל או סיסמה שגויים. אנא נסה שוב.')
+        console.error(
+          '[Auth] signInWithPassword failed' +
+          ` | message: ${authError.message}` +
+          ` | status: ${authError.status}` +
+          ` | name: ${authError.name}`
+        )
+        // 400 = wrong credentials or email not confirmed
+        if (authError.status === 400 || authError.message?.toLowerCase().includes('invalid')) {
+          setError('אימייל או סיסמה שגויים. אנא נסה שוב.')
+        } else if (authError.message?.toLowerCase().includes('confirm')) {
+          setError('יש לאמת את האימייל לפני הכניסה. בדוק את תיבת הדואר שלך.')
+        } else {
+          setError(`ההתחברות נכשלה: ${authError.message}`)
+        }
       } else {
         router.push('/')
         router.refresh()

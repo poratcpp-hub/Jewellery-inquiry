@@ -17,23 +17,28 @@ const IS_DEMO =
   !process.env.NEXT_PUBLIC_SUPABASE_URL ||
   process.env.NEXT_PUBLIC_SUPABASE_URL === 'https://placeholder.supabase.co'
 
-function logQueryError(table: string, error: { message?: string; code?: string; details?: string; hint?: string }) {
+function logQueryError(
+  table: string,
+  error: { message?: string; code?: string; details?: string; hint?: string; status?: number },
+) {
   const isHostError = error.message?.includes('Host not in allowlist')
   if (isHostError) {
     console.error(
       `[Supabase] ❌ "${table}" → Host not in allowlist\n` +
-      `  Your key (sb_publishable_...) requires a host allowlist in Supabase.\n` +
-      `  Fix: Supabase Dashboard → Project Settings → API → API Keys\n` +
-      `  1. Add your domain/localhost to the publishable key allowlist, OR\n` +
-      `  2. Replace the key with the "anon public" JWT key (starts with eyJ...)`
+      `  Your key requires a host allowlist. Fix:\n` +
+      `  1. Use the "anon public" JWT key (eyJ...) from Supabase → Project Settings → API, OR\n` +
+      `  2. Add your domain/localhost to the publishable key allowlist`
     )
   } else {
-    console.error(`[Supabase] ❌ query on "${table}" failed:`, {
-      message: error.message,
-      code: error.code,
-      details: error.details,
-      hint: error.hint,
-    })
+    // Log as a flat string so it's always readable (never collapses to "[Object]")
+    console.error(
+      `[Supabase] ❌ "${table}" failed` +
+      ` | message: ${error.message ?? '—'}` +
+      ` | code: ${error.code ?? '—'}` +
+      ` | status: ${error.status ?? '—'}` +
+      ` | details: ${error.details ?? '—'}` +
+      ` | hint: ${error.hint ?? '—'}`
+    )
   }
 }
 
@@ -67,16 +72,34 @@ async function fetchByIds<T>(
 
 export async function checkDatabaseConnection(): Promise<{ ok: boolean; error?: string; isHostError?: boolean }> {
   if (IS_DEMO) return { ok: true }
-  const { data, error } = await supabase.from('customers').select('id').limit(1)
-  if (error) {
-    logQueryError('customers', error)
+
+  // Check customers first — fast gate on basic connectivity
+  const { error: custErr } = await supabase.from('customers').select('id').limit(1)
+  if (custErr) {
+    logQueryError('customers', custErr)
     return {
       ok: false,
-      error: error.message,
-      isHostError: error.message?.includes('Host not in allowlist'),
+      error: custErr.message,
+      isHostError: custErr.message?.includes('Host not in allowlist'),
     }
   }
   console.log('[Supabase] ✅ DB connection OK, customers table accessible')
+
+  // Probe all other tables in parallel so the console shows exactly which ones fail
+  const tables = ['leads', 'quotes', 'orders', 'payments', 'expenses', 'suppliers'] as const
+  const probes = await Promise.allSettled(
+    tables.map(t => supabase.from(t).select('id').limit(1).then((r: { error: { message?: string; code?: string; details?: string; hint?: string; status?: number } | null }) => ({ t, error: r.error })))
+  )
+  for (const probe of probes) {
+    if (probe.status === 'rejected') continue
+    const { t, error } = probe.value
+    if (error) {
+      logQueryError(t, error)
+    } else {
+      console.log(`[Supabase] ✅ ${t} table accessible`)
+    }
+  }
+
   return { ok: true }
 }
 
