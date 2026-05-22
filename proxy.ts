@@ -7,7 +7,7 @@ const IS_DEMO = !process.env.NEXT_PUBLIC_SUPABASE_URL ||
   process.env.NEXT_PUBLIC_SUPABASE_URL === 'https://placeholder.supabase.co' ||
   process.env.NEXT_PUBLIC_DEMO_MODE === 'true'
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
   if (IS_DEMO || PUBLIC_PATHS.some(p => pathname.startsWith(p)) || pathname.startsWith('/_next') || pathname.includes('.')) {
     return NextResponse.next()
