@@ -15,7 +15,7 @@ import { useDebounce, useTableSort } from '@/lib/hooks'
 import { formatDate, exportCsv, generateQuoteNumber } from '@/lib/utils'
 import { getCustomers, upsertCustomer, deleteCustomer, upsertLead, upsertQuote } from '@/lib/data'
 import type { Customer } from '@/lib/types'
-import { Plus, Search, Pencil, Trash2, Phone, AtSign, Download } from 'lucide-react'
+import { Plus, Search, Pencil, Trash2, Phone, AtSign, Download, ClipboardList } from 'lucide-react'
 
 function WaLink({ phone }: { phone: string }) {
   const normalized = phone.replace(/^0/, '').replace(/\D/g, '')
@@ -152,6 +152,27 @@ export default function CustomersPage() {
     })))
   }, [sorted])
 
+  const openLeadForCustomer = useCallback(async (customer: Customer) => {
+    try {
+      await upsertLead({
+        full_name: customer.full_name,
+        phone: customer.phone,
+        source: customer.source,
+        customer_id: customer.id,
+        lead_status: 'חדש',
+        priority: 'בינוני',
+      })
+      toast({
+        type: 'info',
+        title: `ליד נפתח עבור "${customer.full_name}"`,
+        description: 'הליד נוסף לרשימת הלידים — יש למלא את הפרטים',
+      })
+    } catch (err) {
+      console.error('Open lead failed:', err)
+      toast({ type: 'error', title: 'שגיאה בפתיחת ליד' })
+    }
+  }, [toast])
+
   const openEdit = useCallback((c: Customer) => { setEditing(c); setFormOpen(true) }, [])
   const openNew = useCallback(() => { setEditing(undefined); setFormOpen(true) }, [])
   const closeForm = useCallback(() => { setFormOpen(false); setEditing(undefined) }, [])
@@ -230,6 +251,7 @@ export default function CustomersPage() {
                     <TableCell>
                       <div className="flex items-center gap-1">
                         <Button variant="ghost" size="icon" onClick={() => openEdit(customer)} title="עריכה"><Pencil size={15} /></Button>
+                        <Button variant="ghost" size="icon" onClick={() => openLeadForCustomer(customer)} title="פתח ליד" className="text-[#b8934a] hover:text-[#a07840] hover:bg-[#fdf6ec]"><ClipboardList size={15} /></Button>
                         <Button variant="ghost" size="icon" onClick={() => setDeleteTarget(customer)} title="מחיקה" className="text-red-500 hover:text-red-700 hover:bg-red-50"><Trash2 size={15} /></Button>
                       </div>
                     </TableCell>
