@@ -1,27 +1,72 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { Shell } from '@/components/layout/shell'
 import { MetricCard } from '@/components/dashboard/metric-card'
 import { RecentOrders } from '@/components/dashboard/recent-orders'
 import { UpcomingDeliveries } from '@/components/dashboard/upcoming-deliveries'
 import { MetricsSkeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
-import { TrendingUp, TrendingDown, DollarSign, ShoppingBag, FileText, Target, AlertCircle, Calendar } from 'lucide-react'
+import { TrendingUp, TrendingDown, DollarSign, ShoppingBag, FileText, Target, AlertCircle, Calendar, ArrowLeft } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
 import { getPayments, getExpenses, getLeads, getQuotes, getOrders, getCustomers } from '@/lib/data'
-import type { DashboardMetrics, Order } from '@/lib/types'
+import type { DashboardMetrics, Order, Lead, Quote } from '@/lib/types'
 import { CLOSED_ORDER_STATUSES, CLOSED_QUOTE_STATUSES, CLOSED_LEAD_STATUSES } from '@/lib/constants'
+
+function ConversionFunnel({ leads, quotes, orders }: { leads: Lead[], quotes: Quote[], orders: Order[] }) {
+  const steps = useMemo(() => {
+    const totalLeads = leads.length
+    const convertedLeads = leads.filter(l => l.lead_status === 'הומר').length
+    const totalQuotes = quotes.length
+    const approvedQuotes = quotes.filter(q => q.quote_status === 'אושרה').length
+    const totalOrders = orders.length
+    const deliveredOrders = orders.filter(o => o.order_status === 'נמסר').length
+
+    return [
+      { label: 'לידים', total: totalLeads, sub: `${convertedLeads} הומרו`, pct: totalLeads > 0 ? Math.round((convertedLeads / totalLeads) * 100) : 0, color: 'bg-blue-400' },
+      { label: 'הצעות מחיר', total: totalQuotes, sub: `${approvedQuotes} אושרו`, pct: totalQuotes > 0 ? Math.round((approvedQuotes / totalQuotes) * 100) : 0, color: 'bg-[#b8934a]' },
+      { label: 'הזמנות', total: totalOrders, sub: `${deliveredOrders} נמסרו`, pct: totalOrders > 0 ? Math.round((deliveredOrders / totalOrders) * 100) : 0, color: 'bg-emerald-500' },
+    ]
+  }, [leads, quotes, orders])
+
+  return (
+    <div className="bg-white rounded-xl border border-[#e5ddd0] shadow-[0_1px_8px_rgba(26,18,9,0.06)] p-5">
+      <h3 className="text-sm font-semibold text-[#2c1810] mb-4">משפך המרות</h3>
+      <div className="flex items-center gap-2">
+        {steps.map((step, i) => (
+          <div key={step.label} className="flex items-center gap-2 flex-1">
+            <div className="flex-1">
+              <div className="flex justify-between items-baseline mb-1.5">
+                <span className="text-xs font-medium text-[#4a3728]">{step.label}</span>
+                <span className="text-lg font-bold text-[#2c1810]">{step.total}</span>
+              </div>
+              <div className="h-2 bg-[#f0ebe0] rounded-full overflow-hidden">
+                <div className={`h-full ${step.color} rounded-full transition-all duration-500`} style={{ width: `${Math.max(step.pct, 4)}%` }} />
+              </div>
+              <div className="flex justify-between mt-1">
+                <span className="text-xs text-[#7a6a52]">{step.sub}</span>
+                <span className="text-xs font-medium text-[#7a6a52]">{step.pct}%</span>
+              </div>
+            </div>
+            {i < steps.length - 1 && <ArrowLeft size={14} className="text-[#c5b8a0] shrink-0 mb-3" />}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
 
 export default function DashboardPage() {
   const { toast } = useToast()
   const [metrics, setMetrics] = useState<DashboardMetrics | null>(null)
   const [recentOrders, setRecentOrders] = useState<Order[]>([])
   const [upcomingDeliveries, setUpcomingDeliveries] = useState<Order[]>([])
+  const [allLeads, setAllLeads] = useState<Lead[]>([])
+  const [allQuotes, setAllQuotes] = useState<Quote[]>([])
+  const [allOrders, setAllOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // Single parallel fetch for everything the dashboard needs
     Promise.all([getPayments(), getExpenses(), getLeads(), getQuotes(), getOrders(), getCustomers()])
       .then(([payments, expenses, leads, quotes, orders, customers]) => {
         const now = new Date()
@@ -55,6 +100,9 @@ export default function DashboardPage() {
           }).length,
         })
 
+        setAllLeads(leads)
+        setAllQuotes(quotes)
+        setAllOrders(enrichedOrders)
         setRecentOrders(enrichedOrders.slice(0, 5))
         setUpcomingDeliveries(
           enrichedOrders.filter(o => {
@@ -97,6 +145,8 @@ export default function DashboardPage() {
               <MetricCard title="לידים פעילים" value={String(metrics.newLeads)} subtitle="מחכים לטיפול" icon={<Target size={20} />} />
               <MetricCard title="מסירות קרובות" value={String(metrics.upcomingDeliveries)} subtitle="14 הימים הקרובים" variant={metrics.upcomingDeliveries > 0 ? 'warning' : 'default'} icon={<Calendar size={20} />} />
             </div>
+
+            <ConversionFunnel leads={allLeads} quotes={allQuotes} orders={allOrders} />
           </>
         )}
 

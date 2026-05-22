@@ -7,17 +7,17 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { Badge, getStatusBadgeVariant } from '@/components/ui/badge'
-import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
+import { Table, TableHeader, TableBody, TableRow, SortableHead, TableCell } from '@/components/ui/table'
 import { QuoteForm } from '@/components/quotes/quote-form'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { TableSkeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
-import { useDebounce } from '@/lib/hooks'
-import { formatCurrency, formatDate, getProfitColor } from '@/lib/utils'
+import { useDebounce, useTableSort } from '@/lib/hooks'
+import { formatCurrency, formatDate, getProfitColor, exportCsv } from '@/lib/utils'
 import { getQuotes, upsertQuote, deleteQuote, getCustomers } from '@/lib/data'
 import { QUOTE_STATUSES } from '@/lib/constants'
 import type { Quote, Customer } from '@/lib/types'
-import { Plus, Search, Pencil, Trash2, ArrowLeftRight } from 'lucide-react'
+import { Plus, Search, Pencil, Trash2, ArrowLeftRight, Download } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export default function QuotesPage() {
@@ -42,10 +42,7 @@ export default function QuotesPage() {
       .finally(() => setLoading(false))
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleSearch = useDebounce(
-    useCallback((q: string) => setSearch(q), []),
-    200
-  )
+  const handleSearch = useDebounce(useCallback((q: string) => setSearch(q), []), 200)
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase()
@@ -55,6 +52,8 @@ export default function QuotesPage() {
       return matchSearch && (!statusFilter || quote.quote_status === statusFilter)
     })
   }, [quotes, search, statusFilter])
+
+  const { sorted, sortKey, sortDir, toggleSort } = useTableSort<Quote>(filtered, 'created_at', 'desc')
 
   const totalValue = useMemo(() => filtered.reduce((s, q) => s + q.sale_price, 0), [filtered])
 
@@ -98,6 +97,21 @@ export default function QuotesPage() {
     }
   }, [toast])
 
+  const handleExport = useCallback(() => {
+    exportCsv('quotes', sorted.map(q => ({
+      'מספר הצעה': q.quote_number,
+      לקוח: q.customers?.full_name || '',
+      'סוג תכשיט': q.jewelry_type || '',
+      'סוג יהלום': q.diamond_type || '',
+      קראט: q.carat || '',
+      'עלות כוללת': q.total_cost,
+      'מחיר מכירה': q.sale_price,
+      'מרווח %': q.profit_margin.toFixed(1),
+      סטטוס: q.quote_status,
+      'תוקף עד': q.valid_until || '',
+    })))
+  }, [sorted])
+
   const openEdit = useCallback((q: Quote) => { setEditing(q); setFormOpen(true) }, [])
   const openNew = useCallback(() => { setEditing(undefined); setFormOpen(true) }, [])
   const closeForm = useCallback(() => { setFormOpen(false); setEditing(undefined) }, [])
@@ -108,7 +122,14 @@ export default function QuotesPage() {
         <PageHeader
           title="הצעות מחיר"
           description={`${filtered.length} הצעות · שווי ${formatCurrency(totalValue)}`}
-          action={<Button onClick={openNew}><Plus size={16} />הצעה חדשה</Button>}
+          action={
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={handleExport} title="ייצוא CSV">
+                <Download size={15} /><span className="hidden sm:inline">ייצוא</span>
+              </Button>
+              <Button onClick={openNew}><Plus size={16} />הצעה חדשה</Button>
+            </div>
+          }
         />
 
         <div className="flex gap-3 mb-4">
@@ -127,30 +148,26 @@ export default function QuotesPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>מספר הצעה</TableHead>
-                  <TableHead>לקוח</TableHead>
-                  <TableHead className="hidden md:table-cell">תכשיט</TableHead>
-                  <TableHead className="hidden lg:table-cell">עלות</TableHead>
-                  <TableHead>מחיר מכירה</TableHead>
-                  <TableHead className="hidden md:table-cell">מרווח</TableHead>
-                  <TableHead>סטטוס</TableHead>
-                  <TableHead className="hidden lg:table-cell">תוקף</TableHead>
-                  <TableHead>פעולות</TableHead>
+                  <SortableHead sortKey="quote_number" activeSortKey={sortKey as string} sortDir={sortDir} onSort={k => toggleSort(k as keyof Quote)}>מספר הצעה</SortableHead>
+                  <SortableHead sortKey="customers" activeSortKey={sortKey as string} sortDir={sortDir} onSort={k => toggleSort(k as keyof Quote)}>לקוח</SortableHead>
+                  <SortableHead className="hidden md:table-cell">תכשיט</SortableHead>
+                  <SortableHead sortKey="total_cost" activeSortKey={sortKey as string} sortDir={sortDir} onSort={k => toggleSort(k as keyof Quote)} className="hidden lg:table-cell">עלות</SortableHead>
+                  <SortableHead sortKey="sale_price" activeSortKey={sortKey as string} sortDir={sortDir} onSort={k => toggleSort(k as keyof Quote)}>מחיר מכירה</SortableHead>
+                  <SortableHead sortKey="profit_margin" activeSortKey={sortKey as string} sortDir={sortDir} onSort={k => toggleSort(k as keyof Quote)} className="hidden md:table-cell">מרווח</SortableHead>
+                  <SortableHead sortKey="quote_status" activeSortKey={sortKey as string} sortDir={sortDir} onSort={k => toggleSort(k as keyof Quote)}>סטטוס</SortableHead>
+                  <SortableHead sortKey="valid_until" activeSortKey={sortKey as string} sortDir={sortDir} onSort={k => toggleSort(k as keyof Quote)} className="hidden lg:table-cell">תוקף</SortableHead>
+                  <SortableHead>פעולות</SortableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filtered.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={9} className="text-center text-[#7a6a52] py-12">
-                      {search || statusFilter ? 'לא נמצאו הצעות התואמות לחיפוש' : 'אין הצעות מחיר עדיין'}
-                    </TableCell>
-                  </TableRow>
+                  <tr><td colSpan={9} className="text-center text-[#7a6a52] py-12 text-sm">
+                    {search || statusFilter ? 'לא נמצאו הצעות התואמות לחיפוש' : 'אין הצעות מחיר עדיין'}
+                  </td></tr>
                 )}
-                {filtered.map(quote => (
+                {sorted.map(quote => (
                   <TableRow key={quote.id}>
-                    <TableCell>
-                      <span className="font-mono text-sm font-medium text-[#b8934a]">{quote.quote_number}</span>
-                    </TableCell>
+                    <TableCell><span className="font-mono text-sm font-medium text-[#b8934a]">{quote.quote_number}</span></TableCell>
                     <TableCell className="font-medium text-[#2c1810]">{quote.customers?.full_name || '—'}</TableCell>
                     <TableCell className="hidden md:table-cell text-[#7a6a52] text-sm">
                       {quote.jewelry_type || '—'}
@@ -163,25 +180,17 @@ export default function QuotesPage() {
                         {quote.profit_margin.toFixed(1)}%
                       </span>
                     </TableCell>
-                    <TableCell>
-                      <Badge variant={getStatusBadgeVariant(quote.quote_status)}>{quote.quote_status}</Badge>
-                    </TableCell>
-                    <TableCell className="hidden lg:table-cell text-[#7a6a52] text-sm">
-                      {formatDate(quote.valid_until)}
-                    </TableCell>
+                    <TableCell><Badge variant={getStatusBadgeVariant(quote.quote_status)}>{quote.quote_status}</Badge></TableCell>
+                    <TableCell className="hidden lg:table-cell text-[#7a6a52] text-sm">{formatDate(quote.valid_until)}</TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1">
-                        <Button variant="ghost" size="icon" onClick={() => openEdit(quote)} title="עריכה">
-                          <Pencil size={15} />
-                        </Button>
+                        <Button variant="ghost" size="icon" onClick={() => openEdit(quote)} title="עריכה"><Pencil size={15} /></Button>
                         {!['אושרה', 'נדחתה'].includes(quote.quote_status) && (
                           <Button variant="ghost" size="icon" onClick={() => convertToOrder(quote)} title="אשר הצעה" className="text-[#b8934a]">
                             <ArrowLeftRight size={15} />
                           </Button>
                         )}
-                        <Button variant="ghost" size="icon" onClick={() => setDeleteTarget(quote)} title="מחיקה" className="text-red-500 hover:text-red-700 hover:bg-red-50">
-                          <Trash2 size={15} />
-                        </Button>
+                        <Button variant="ghost" size="icon" onClick={() => setDeleteTarget(quote)} title="מחיקה" className="text-red-500 hover:text-red-700 hover:bg-red-50"><Trash2 size={15} /></Button>
                       </div>
                     </TableCell>
                   </TableRow>

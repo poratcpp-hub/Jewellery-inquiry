@@ -7,17 +7,17 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { Badge, getStatusBadgeVariant } from '@/components/ui/badge'
-import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
+import { Table, TableHeader, TableBody, TableRow, SortableHead, TableCell } from '@/components/ui/table'
 import { LeadForm } from '@/components/leads/lead-form'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { TableSkeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
-import { useDebounce } from '@/lib/hooks'
-import { formatCurrency, formatDate, isOverdue } from '@/lib/utils'
+import { useDebounce, useTableSort } from '@/lib/hooks'
+import { formatCurrency, formatDate, isOverdue, exportCsv } from '@/lib/utils'
 import { getLeads, upsertLead, deleteLead, getCustomers } from '@/lib/data'
 import { LEAD_STATUSES } from '@/lib/constants'
 import type { Lead, Customer } from '@/lib/types'
-import { Plus, Search, Pencil, Trash2, ArrowLeftRight, AlertTriangle } from 'lucide-react'
+import { Plus, Search, Pencil, Trash2, ArrowLeftRight, AlertTriangle, Download } from 'lucide-react'
 
 export default function LeadsPage() {
   const { toast } = useToast()
@@ -37,10 +37,7 @@ export default function LeadsPage() {
       .finally(() => setLoading(false))
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleSearch = useDebounce(
-    useCallback((q: string) => setSearch(q), []),
-    200
-  )
+  const handleSearch = useDebounce(useCallback((q: string) => setSearch(q), []), 200)
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase()
@@ -49,6 +46,8 @@ export default function LeadsPage() {
       return matchSearch && (!statusFilter || l.lead_status === statusFilter)
     })
   }, [leads, search, statusFilter])
+
+  const { sorted, sortKey, sortDir, toggleSort } = useTableSort<Lead>(filtered, 'created_at', 'desc')
 
   const activeCount = useMemo(
     () => leads.filter(l => !['הומר', 'נסגר'].includes(l.lead_status)).length,
@@ -94,6 +93,19 @@ export default function LeadsPage() {
     }
   }, [toast])
 
+  const handleExport = useCallback(() => {
+    exportCsv('leads', sorted.map(l => ({
+      שם: l.full_name || '',
+      טלפון: l.phone || '',
+      'סוג תכשיט': l.jewelry_type || '',
+      תקציב: l.budget || '',
+      סטטוס: l.lead_status,
+      עדיפות: l.priority,
+      מקור: l.source || '',
+      'תאריך מעקב': l.follow_up_date || '',
+    })))
+  }, [sorted])
+
   const openEdit = useCallback((l: Lead) => { setEditing(l); setFormOpen(true) }, [])
   const openNew = useCallback(() => { setEditing(undefined); setFormOpen(true) }, [])
   const closeForm = useCallback(() => { setFormOpen(false); setEditing(undefined) }, [])
@@ -104,7 +116,14 @@ export default function LeadsPage() {
         <PageHeader
           title="לידים"
           description={`${leads.length} לידים · ${activeCount} פעילים`}
-          action={<Button onClick={openNew}><Plus size={16} />ליד חדש</Button>}
+          action={
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={handleExport} title="ייצוא CSV">
+                <Download size={15} /><span className="hidden sm:inline">ייצוא</span>
+              </Button>
+              <Button onClick={openNew}><Plus size={16} />ליד חדש</Button>
+            </div>
+          }
         />
 
         <div className="flex gap-3 mb-4">
@@ -123,24 +142,22 @@ export default function LeadsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>שם</TableHead>
-                  <TableHead className="hidden sm:table-cell">טלפון</TableHead>
-                  <TableHead className="hidden md:table-cell">תכשיט / תקציב</TableHead>
-                  <TableHead>סטטוס</TableHead>
-                  <TableHead>עדיפות</TableHead>
-                  <TableHead className="hidden md:table-cell">מעקב</TableHead>
-                  <TableHead>פעולות</TableHead>
+                  <SortableHead sortKey="full_name" activeSortKey={sortKey as string} sortDir={sortDir} onSort={k => toggleSort(k as keyof Lead)}>שם</SortableHead>
+                  <SortableHead className="hidden sm:table-cell">טלפון</SortableHead>
+                  <SortableHead className="hidden md:table-cell">תכשיט / תקציב</SortableHead>
+                  <SortableHead sortKey="lead_status" activeSortKey={sortKey as string} sortDir={sortDir} onSort={k => toggleSort(k as keyof Lead)}>סטטוס</SortableHead>
+                  <SortableHead sortKey="priority" activeSortKey={sortKey as string} sortDir={sortDir} onSort={k => toggleSort(k as keyof Lead)}>עדיפות</SortableHead>
+                  <SortableHead sortKey="follow_up_date" activeSortKey={sortKey as string} sortDir={sortDir} onSort={k => toggleSort(k as keyof Lead)} className="hidden md:table-cell">מעקב</SortableHead>
+                  <SortableHead>פעולות</SortableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filtered.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={7} className="text-center text-[#7a6a52] py-12">
-                      {search || statusFilter ? 'לא נמצאו לידים התואמים לחיפוש' : 'אין לידים עדיין — הוסף ליד ראשון'}
-                    </TableCell>
-                  </TableRow>
+                  <tr><td colSpan={7} className="text-center text-[#7a6a52] py-12 text-sm">
+                    {search || statusFilter ? 'לא נמצאו לידים התואמים לחיפוש' : 'אין לידים עדיין — הוסף ליד ראשון'}
+                  </td></tr>
                 )}
-                {filtered.map(lead => {
+                {sorted.map(lead => {
                   const overdue = lead.follow_up_date && isOverdue(lead.follow_up_date) &&
                     !['הומר', 'נסגר'].includes(lead.lead_status)
                   return (
@@ -170,17 +187,13 @@ export default function LeadsPage() {
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1">
-                          <Button variant="ghost" size="icon" onClick={() => openEdit(lead)} title="עריכה">
-                            <Pencil size={15} />
-                          </Button>
+                          <Button variant="ghost" size="icon" onClick={() => openEdit(lead)} title="עריכה"><Pencil size={15} /></Button>
                           {!['הומר', 'נסגר'].includes(lead.lead_status) && (
                             <Button variant="ghost" size="icon" onClick={() => convertToQuote(lead)} title="המר לטיפול" className="text-[#b8934a]">
                               <ArrowLeftRight size={15} />
                             </Button>
                           )}
-                          <Button variant="ghost" size="icon" onClick={() => setDeleteTarget(lead)} title="מחיקה" className="text-red-500 hover:text-red-700 hover:bg-red-50">
-                            <Trash2 size={15} />
-                          </Button>
+                          <Button variant="ghost" size="icon" onClick={() => setDeleteTarget(lead)} title="מחיקה" className="text-red-500 hover:text-red-700 hover:bg-red-50"><Trash2 size={15} /></Button>
                         </div>
                       </TableCell>
                     </TableRow>
