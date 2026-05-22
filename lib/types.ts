@@ -13,6 +13,9 @@ export interface Customer {
   orders_count?: number
   created_at: string
   updated_at: string
+  leads?: Lead[]
+  quotes?: Quote[]
+  orders?: Order[]
 }
 
 export interface Supplier {
@@ -124,6 +127,8 @@ export interface Order {
   customers?: Customer
   quotes?: Quote
   suppliers?: Supplier
+  payments?: Payment[]
+  expenses?: Expense[]
 }
 
 export interface Payment {

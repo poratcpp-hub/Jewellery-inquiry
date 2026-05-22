@@ -15,7 +15,8 @@ import { useDebounce, useTableSort } from '@/lib/hooks'
 import { formatDate, exportCsv, generateQuoteNumber } from '@/lib/utils'
 import { getCustomers, upsertCustomer, deleteCustomer, upsertLead, upsertQuote } from '@/lib/data'
 import type { Customer } from '@/lib/types'
-import { Plus, Search, Pencil, Trash2, Phone, AtSign, Download, ClipboardList } from 'lucide-react'
+import Link from 'next/link'
+import { Plus, Search, Pencil, Trash2, Phone, AtSign, Download, ClipboardList, Eye } from 'lucide-react'
 
 function WaLink({ phone }: { phone: string }) {
   const normalized = phone.replace(/^0/, '').replace(/\D/g, '')
@@ -250,6 +251,7 @@ export default function CustomersPage() {
                     <TableCell className="hidden lg:table-cell text-[#7a6a52] text-sm">{formatDate(customer.created_at)}</TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1">
+                        <Link href={`/customers/${customer.id}`}><Button variant="ghost" size="icon" title="פרופיל"><Eye size={15} /></Button></Link>
                         <Button variant="ghost" size="icon" onClick={() => openEdit(customer)} title="עריכה"><Pencil size={15} /></Button>
                         <Button variant="ghost" size="icon" onClick={() => openLeadForCustomer(customer)} title="פתח ליד" className="text-[#b8934a] hover:text-[#a07840] hover:bg-[#fdf6ec]"><ClipboardList size={15} /></Button>
                         <Button variant="ghost" size="icon" onClick={() => setDeleteTarget(customer)} title="מחיקה" className="text-red-500 hover:text-red-700 hover:bg-red-50"><Trash2 size={15} /></Button>

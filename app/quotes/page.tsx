@@ -17,7 +17,8 @@ import { formatCurrency, formatDate, getProfitColor, exportCsv } from '@/lib/uti
 import { getQuotes, upsertQuote, deleteQuote, getCustomers, upsertCustomer } from '@/lib/data'
 import { QUOTE_STATUSES } from '@/lib/constants'
 import type { Quote, Customer } from '@/lib/types'
-import { Plus, Search, Pencil, Trash2, ArrowLeftRight, Download } from 'lucide-react'
+import Link from 'next/link'
+import { Plus, Search, Pencil, Trash2, ArrowLeftRight, Download, Eye } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export default function QuotesPage() {
@@ -188,6 +189,7 @@ export default function QuotesPage() {
                     <TableCell className="hidden lg:table-cell text-[#7a6a52] text-sm">{formatDate(quote.valid_until)}</TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1">
+                        <Link href={`/quotes/${quote.id}`}><Button variant="ghost" size="icon" title="פרטים"><Eye size={15} /></Button></Link>
                         <Button variant="ghost" size="icon" onClick={() => openEdit(quote)} title="עריכה"><Pencil size={15} /></Button>
                         {!['אושרה', 'נדחתה'].includes(quote.quote_status) && (
                           <Button variant="ghost" size="icon" onClick={() => convertToOrder(quote)} title="אשר הצעה" className="text-[#b8934a]">

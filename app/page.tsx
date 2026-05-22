@@ -7,11 +7,91 @@ import { RecentOrders } from '@/components/dashboard/recent-orders'
 import { UpcomingDeliveries } from '@/components/dashboard/upcoming-deliveries'
 import { MetricsSkeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
-import { TrendingUp, TrendingDown, DollarSign, ShoppingBag, FileText, Target, AlertCircle, Calendar, ArrowLeft } from 'lucide-react'
-import { formatCurrency } from '@/lib/utils'
+import Link from 'next/link'
+import { TrendingUp, TrendingDown, DollarSign, ShoppingBag, FileText, Target, AlertCircle, Calendar, ArrowLeft, AlertTriangle, Clock } from 'lucide-react'
+import { formatCurrency, formatDate } from '@/lib/utils'
 import { getPayments, getExpenses, getLeads, getQuotes, getOrders, getCustomers } from '@/lib/data'
 import type { DashboardMetrics, Order, Lead, Quote } from '@/lib/types'
 import { CLOSED_ORDER_STATUSES, CLOSED_QUOTE_STATUSES, CLOSED_LEAD_STATUSES } from '@/lib/constants'
+
+function AlertsWidget({ leads, quotes, orders }: { leads: Lead[], quotes: Quote[], orders: Order[] }) {
+  const now = new Date()
+  now.setHours(0, 0, 0, 0)
+  const in3Days = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000)
+  const in7Days = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
+
+  const overdueLeads = leads.filter(l => {
+    if (!l.follow_up_date || CLOSED_LEAD_STATUSES.has(l.lead_status)) return false
+    const d = new Date(l.follow_up_date); d.setHours(0, 0, 0, 0)
+    return d <= now
+  })
+  const expiringQuotes = quotes.filter(q => {
+    if (!q.valid_until || q.quote_status !== 'נשלחה') return false
+    const d = new Date(q.valid_until); d.setHours(0, 0, 0, 0)
+    return d >= now && d <= in7Days
+  })
+  const urgentDeliveries = orders.filter(o => {
+    if (!o.delivery_date || CLOSED_ORDER_STATUSES.has(o.order_status)) return false
+    const d = new Date(o.delivery_date); d.setHours(0, 0, 0, 0)
+    return d >= now && d <= in3Days
+  })
+
+  const total = overdueLeads.length + expiringQuotes.length + urgentDeliveries.length
+  if (total === 0) return null
+
+  return (
+    <div className="bg-red-50 border border-red-200 rounded-xl p-4">
+      <h3 className="text-sm font-semibold text-red-800 mb-3 flex items-center gap-1.5">
+        <AlertTriangle size={15} />
+        דרוש טיפול ({total})
+      </h3>
+      <div className="space-y-2">
+        {overdueLeads.map(l => (
+          <Link key={l.id} href={`/leads/${l.id}`}>
+            <div className="flex items-center justify-between p-2.5 bg-white rounded-lg border border-red-100 hover:border-red-300 transition-colors cursor-pointer">
+              <div className="flex items-center gap-2">
+                <Clock size={13} className="text-red-500 shrink-0" />
+                <div>
+                  <p className="text-sm font-medium text-[#2c1810]">{l.full_name} — מעקב באיחור</p>
+                  <p className="text-xs text-[#7a6a52]">תאריך מעקב: {formatDate(l.follow_up_date)}</p>
+                </div>
+              </div>
+              <ArrowLeft size={13} className="text-[#7a6a52]" />
+            </div>
+          </Link>
+        ))}
+        {expiringQuotes.map(q => (
+          <Link key={q.id} href={`/quotes/${q.id}`}>
+            <div className="flex items-center justify-between p-2.5 bg-white rounded-lg border border-amber-100 hover:border-amber-300 transition-colors cursor-pointer">
+              <div className="flex items-center gap-2">
+                <FileText size={13} className="text-amber-500 shrink-0" />
+                <div>
+                  <p className="text-sm font-medium text-[#2c1810]">{q.quote_number} — פג תוקף בקרוב</p>
+                  <p className="text-xs text-[#7a6a52]">תוקף עד: {formatDate(q.valid_until)}</p>
+                </div>
+              </div>
+              <ArrowLeft size={13} className="text-[#7a6a52]" />
+            </div>
+          </Link>
+        ))}
+        {urgentDeliveries.map(o => (
+          <Link key={o.id} href={`/orders/${o.id}`}>
+            <div className="flex items-center justify-between p-2.5 bg-white rounded-lg border border-red-100 hover:border-red-300 transition-colors cursor-pointer">
+              <div className="flex items-center gap-2">
+                <AlertTriangle size={13} className="text-red-500 shrink-0" />
+                <div>
+                  <p className="text-sm font-medium text-[#2c1810]">{o.order_number} — מסירה דחופה</p>
+                  <p className="text-xs text-[#7a6a52]">תאריך מסירה: {formatDate(o.delivery_date)}</p>
+                </div>
+              </div>
+              <ArrowLeft size={13} className="text-[#7a6a52]" />
+            </div>
+          </Link>
+        ))}
+      </div>
+    </div>
+  )
+}
 
 function ConversionFunnel({ leads, quotes, orders }: { leads: Lead[], quotes: Quote[], orders: Order[] }) {
   const steps = useMemo(() => {
@@ -146,6 +226,7 @@ export default function DashboardPage() {
               <MetricCard title="מסירות קרובות" value={String(metrics.upcomingDeliveries)} subtitle="14 הימים הקרובים" variant={metrics.upcomingDeliveries > 0 ? 'warning' : 'default'} icon={<Calendar size={20} />} />
             </div>
 
+            <AlertsWidget leads={allLeads} quotes={allQuotes} orders={allOrders} />
             <ConversionFunnel leads={allLeads} quotes={allQuotes} orders={allOrders} />
           </>
         )}

@@ -228,6 +228,62 @@ export async function deleteSupplier(id: string): Promise<void> {
   if (error) throw error
 }
 
+// ─── Single-entity lookups ───────────────────────────────────────────────────
+
+export async function getQuote(id: string): Promise<Quote> {
+  if (IS_DEMO) {
+    const q = demoQuotes.find(q => q.id === id)
+    if (!q) throw new Error('Quote not found')
+    const customer = demoCustomers.find(c => c.id === q.customer_id)
+    return { ...q, created_at: '', updated_at: '', customers: customer ? { ...customer, created_at: '', updated_at: '' } : undefined }
+  }
+  const { data, error } = await supabase.from('quotes').select('*, customers(*), leads(*)').eq('id', id).single()
+  if (error) throw error
+  return data as Quote
+}
+
+export async function getOrder(id: string): Promise<Order> {
+  if (IS_DEMO) {
+    const o = demoOrders.find(o => o.id === id)
+    if (!o) throw new Error('Order not found')
+    const customer = demoCustomers.find(c => c.id === o.customer_id)
+    const supplier = demoSuppliers.find(s => s.id === o.supplier_id)
+    const payments = demoPayments.filter(p => p.order_id === o.id).map(p => ({ ...p, created_at: '' }))
+    const expenses = demoExpenses.filter(e => e.order_id === o.id).map(e => ({ ...e, created_at: '' }))
+    return {
+      ...o, created_at: '', updated_at: '',
+      customers: customer ? { ...customer, created_at: '', updated_at: '' } : undefined,
+      suppliers: supplier ? { ...supplier, created_at: '' } : undefined,
+      payments, expenses,
+    }
+  }
+  const { data, error } = await supabase
+    .from('orders')
+    .select('*, customers(*), suppliers(*), payments(*), expenses(*)')
+    .eq('id', id)
+    .single()
+  if (error) throw error
+  return data as Order
+}
+
+export async function getCustomerFull(id: string): Promise<Customer> {
+  if (IS_DEMO) {
+    const c = demoCustomers.find(c => c.id === id)
+    if (!c) throw new Error('Customer not found')
+    const leads = demoLeads.filter(l => l.customer_id === c.id).map(l => ({ ...l, created_at: '', updated_at: '' }))
+    const quotes = demoQuotes.filter(q => q.customer_id === c.id).map(q => ({ ...q, created_at: '', updated_at: '' }))
+    const orders = demoOrders.filter(o => o.customer_id === c.id).map(o => ({ ...o, created_at: '', updated_at: '' }))
+    return { ...c, created_at: '', updated_at: '', leads, quotes, orders }
+  }
+  const { data, error } = await supabase
+    .from('customers')
+    .select('*, leads(*), quotes(*), orders(*)')
+    .eq('id', id)
+    .single()
+  if (error) throw error
+  return data as Customer
+}
+
 // ─── Dashboard metrics ───────────────────────────────────────────────────────
 
 export async function getDashboardMetrics(): Promise<DashboardMetrics> {

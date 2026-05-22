@@ -17,7 +17,8 @@ import { formatCurrency, formatDate, daysUntil, exportCsv } from '@/lib/utils'
 import { getOrders, upsertOrder, deleteOrder, getCustomers, getSuppliers } from '@/lib/data'
 import { ORDER_STATUSES } from '@/lib/constants'
 import type { Order, Customer, Supplier } from '@/lib/types'
-import { Plus, Search, Pencil, Trash2, AlertTriangle, Download } from 'lucide-react'
+import Link from 'next/link'
+import { Plus, Search, Pencil, Trash2, AlertTriangle, Download, Eye } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export default function OrdersPage() {
@@ -200,6 +201,7 @@ export default function OrdersPage() {
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1">
+                          <Link href={`/orders/${order.id}`}><Button variant="ghost" size="icon" title="פרטים"><Eye size={15} /></Button></Link>
                           <Button variant="ghost" size="icon" onClick={() => openEdit(order)} title="עריכה"><Pencil size={15} /></Button>
                           <Button variant="ghost" size="icon" onClick={() => setDeleteTarget(order)} title="מחיקה" className="text-red-500 hover:text-red-700 hover:bg-red-50"><Trash2 size={15} /></Button>
                         </div>

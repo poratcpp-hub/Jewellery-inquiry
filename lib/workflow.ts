@@ -1,4 +1,5 @@
-import type { Lead } from './types'
+import { formatCurrency, formatDate } from './utils'
+import type { Lead, Quote } from './types'
 
 export function detectJewelryType(message: string): string | null {
   const m = message.toLowerCase()
@@ -118,4 +119,25 @@ export function getNextAction(lead: Partial<Lead>): {
     return { title: 'מחכה לתגובה', description: 'ההצעה נשלחה — בצע פולואפ', action: 'follow_up' }
 
   return { title: 'הליד סגור', description: '', action: 'done' }
+}
+
+export function generateQuoteMessage(quote: Partial<Quote>, customerName?: string): string {
+  const name = (customerName || '').split(' ')[0] || 'לקוח יקר'
+  let msg = `שלום ${name} 😊\n\nרצינו לשלוח לך את הצעת המחיר עבור ה${quote.jewelry_type || 'תכשיט'} שדיברנו עליה:\n\n`
+  msg += `📋 *הצעת מחיר מספר ${quote.quote_number || ''}*\n`
+  if (quote.jewelry_type) msg += `💍 סוג: ${quote.jewelry_type}\n`
+  if (quote.diamond_type && quote.diamond_type !== 'ללא') {
+    let line = `💎 יהלום: ${quote.diamond_type}`
+    if (quote.carat) line += ` ${quote.carat} קראט`
+    if (quote.diamond_color) line += ` צבע ${quote.diamond_color}`
+    if (quote.diamond_clarity) line += ` ניקיון ${quote.diamond_clarity}`
+    if (quote.diamond_certificate && quote.diamond_certificate !== 'ללא תעודה') line += ` (${quote.diamond_certificate})`
+    if (quote.diamond_origin) line += ` · ${quote.diamond_origin}`
+    msg += line + '\n'
+  }
+  if (quote.gold_type) msg += `🏅 זהב: ${quote.gold_type}${quote.gold_color ? ` ${quote.gold_color}` : ''}\n`
+  if (quote.sale_price) msg += `\n💰 *מחיר: ${formatCurrency(quote.sale_price)}*\n`
+  if (quote.valid_until) msg += `⏰ ההצעה בתוקף עד: ${formatDate(quote.valid_until)}\n`
+  msg += `\nלשאלות נוספות אנחנו כאן! 🙏\nPORAT Private Jeweler`
+  return msg
 }
