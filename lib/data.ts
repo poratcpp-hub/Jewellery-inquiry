@@ -562,6 +562,19 @@ export async function insertPayment(payment: Partial<Payment>): Promise<Payment>
   return data as Payment
 }
 
+export async function upsertPayment(payment: Partial<Payment>): Promise<Payment> {
+  if (IS_DEMO) return { ...payment, id: payment.id || crypto.randomUUID(), amount: payment.amount ?? 0, payment_date: payment.payment_date || new Date().toISOString().split('T')[0], is_paid: payment.is_paid ?? true, created_at: '' } as Payment
+  const { data, error } = await supabase.from('payments').upsert(payment).select().single()
+  if (error) { logSupabaseError('upsertPayment', error); throw error }
+  return data as Payment
+}
+
+export async function deletePayment(id: string): Promise<void> {
+  if (IS_DEMO) return
+  const { error } = await supabase.from('payments').delete().eq('id', id)
+  if (error) { logSupabaseError('deletePayment', error); throw error }
+}
+
 // ─── Expenses ────────────────────────────────────────────────────────────────
 
 export async function getExpenses(): Promise<Expense[]> {

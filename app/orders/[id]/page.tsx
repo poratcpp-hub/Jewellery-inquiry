@@ -11,7 +11,7 @@ import { Badge, getStatusBadgeVariant } from '@/components/ui/badge'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { useToast } from '@/components/ui/toast'
 import { formatCurrency, formatDate, daysUntil, getProfitColor } from '@/lib/utils'
-import { getOrder, upsertOrder, insertPayment, upsertExpense, deleteExpense } from '@/lib/data'
+import { getOrder, upsertOrder, insertPayment, upsertPayment, deletePayment, upsertExpense, deleteExpense } from '@/lib/data'
 import { PRODUCTION_STATUSES, ORDER_STATUSES, PAYMENT_TYPES, PAYMENT_METHODS, EXPENSE_TYPES } from '@/lib/constants'
 import type { Order, Payment, Expense } from '@/lib/types'
 import { ArrowRight, ExternalLink, Plus, CheckCircle, Circle, Calendar, AlertTriangle, Pencil, Trash2, X, Check } from 'lucide-react'
@@ -66,6 +66,12 @@ export default function OrderDetailPage() {
   const [editExpenseForm, setEditExpenseForm] = useState(EMPTY_EXPENSE)
   const [deleteExpenseTarget, setDeleteExpenseTarget] = useState<Expense | undefined>()
 
+  // Payment edit state
+  const [editingPaymentId, setEditingPaymentId] = useState<string | null>(null)
+  const [editPaymentForm, setEditPaymentForm] = useState({ amount: '', payment_type: 'יתרה', payment_method: 'העברה בנקאית', notes: '' })
+  const [savingPayment, setSavingPayment] = useState(false)
+  const [deletePaymentTarget, setDeletePaymentTarget] = useState<Payment | undefined>()
+
   useEffect(() => {
     getOrder(id)
       .then(setOrder)
@@ -117,6 +123,60 @@ export default function OrderDetailPage() {
       setAddingPayment(false)
     }
   }, [order, paymentForm, toast])
+
+  const startEditPayment = useCallback((p: Payment) => {
+    setEditingPaymentId(p.id)
+    setEditPaymentForm({ amount: String(p.amount), payment_type: p.payment_type || 'יתרה', payment_method: p.payment_method || 'העברה בנקאית', notes: p.notes || '' })
+  }, [])
+
+  const recalcAndSavePayments = useCallback(async (newPayments: Payment[]) => {
+    if (!order) return
+    const totalPaid = newPayments.filter(p => p.is_paid).reduce((s, p) => s + p.amount, 0)
+    const newBalance = Math.max(0, order.sale_price - totalPaid)
+    const newPaymentStatus = newBalance === 0 ? 'שולם במלואו' : totalPaid > 0 ? 'שולם חלקית' : 'לא שולם'
+    await upsertOrder({ ...order, balance_due: newBalance, payment_status: newPaymentStatus })
+    setOrder(o => o ? { ...o, payments: newPayments, balance_due: newBalance, payment_status: newPaymentStatus } : o)
+  }, [order])
+
+  const handleSaveEditPayment = useCallback(async (paymentId: string) => {
+    if (!order) return
+    setSavingPayment(true)
+    try {
+      const original = (order.payments || []).find(p => p.id === paymentId)
+      const updated = await upsertPayment({
+        id: paymentId,
+        order_id: order.id,
+        customer_id: order.customer_id,
+        payment_type: editPaymentForm.payment_type,
+        payment_method: editPaymentForm.payment_method,
+        amount: Number(editPaymentForm.amount),
+        payment_date: original?.payment_date || new Date().toISOString().split('T')[0],
+        is_paid: true,
+        notes: editPaymentForm.notes,
+      })
+      const newPayments = (order.payments || []).map(p => p.id === paymentId ? updated : p)
+      await recalcAndSavePayments(newPayments)
+      setEditingPaymentId(null)
+      toast({ type: 'success', title: 'תשלום עודכן' })
+    } catch {
+      toast({ type: 'error', title: 'שגיאה בעדכון תשלום' })
+    } finally {
+      setSavingPayment(false)
+    }
+  }, [order, editPaymentForm, recalcAndSavePayments, toast])
+
+  const handleDeletePayment = useCallback(async () => {
+    if (!deletePaymentTarget || !order) return
+    try {
+      await deletePayment(deletePaymentTarget.id)
+      const newPayments = (order.payments || []).filter(p => p.id !== deletePaymentTarget.id)
+      await recalcAndSavePayments(newPayments)
+      toast({ type: 'success', title: 'תשלום נמחק' })
+    } catch {
+      toast({ type: 'error', title: 'שגיאה במחיקת תשלום' })
+    }
+    setDeletePaymentTarget(undefined)
+  }, [deletePaymentTarget, order, recalcAndSavePayments, toast])
 
   const handleAddExpense = useCallback(async () => {
     if (!order || !addExpenseForm.amount) return
@@ -376,17 +436,48 @@ export default function OrderDetailPage() {
           ) : (
             <div className="space-y-2 mb-3">
               {payments.map((p: Payment) => (
-                <div key={p.id} className="flex items-center justify-between text-sm bg-[#faf8f5] rounded-lg px-3 py-2">
-                  <div>
-                    <span className="font-medium">{p.payment_type}</span>
-                    <span className="text-[#7a6a52] mx-1">·</span>
-                    <span className="text-[#7a6a52]">{p.payment_method}</span>
-                    {p.notes && <span className="text-[#7a6a52] mx-1">· {p.notes}</span>}
-                  </div>
-                  <div className="text-right">
-                    <p className="font-bold text-emerald-600">{formatCurrency(p.amount)}</p>
-                    <p className="text-xs text-[#7a6a52]">{formatDate(p.payment_date)}</p>
-                  </div>
+                <div key={p.id}>
+                  {editingPaymentId === p.id ? (
+                    <div className="bg-[#faf8f5] rounded-lg px-3 py-2 space-y-2">
+                      <div className="grid grid-cols-2 gap-2">
+                        <Input type="number" placeholder="סכום" value={editPaymentForm.amount} onChange={e => setEditPaymentForm(f => ({ ...f, amount: e.target.value }))} />
+                        <Select value={editPaymentForm.payment_method} onChange={e => setEditPaymentForm(f => ({ ...f, payment_method: e.target.value }))}>
+                          {PAYMENT_METHODS.map(m => <option key={m} value={m}>{m}</option>)}
+                        </Select>
+                        <Select value={editPaymentForm.payment_type} onChange={e => setEditPaymentForm(f => ({ ...f, payment_type: e.target.value }))}>
+                          {PAYMENT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                        </Select>
+                        <Input placeholder="הערות" value={editPaymentForm.notes} onChange={e => setEditPaymentForm(f => ({ ...f, notes: e.target.value }))} />
+                      </div>
+                      <div className="flex gap-2">
+                        <Button size="sm" onClick={() => handleSaveEditPayment(p.id)} disabled={savingPayment}>
+                          <Check size={13} />{savingPayment ? 'שומר...' : 'שמור'}
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => setEditingPaymentId(null)}>
+                          <X size={13} />ביטול
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between text-sm bg-[#faf8f5] rounded-lg px-3 py-2">
+                      <div>
+                        <span className="font-medium">{p.payment_type}</span>
+                        <span className="text-[#7a6a52] mx-1">·</span>
+                        <span className="text-[#7a6a52]">{p.payment_method}</span>
+                        {p.notes && <span className="text-[#7a6a52] mx-1">· {p.notes}</span>}
+                        <p className="text-xs text-[#7a6a52]">{formatDate(p.payment_date)}</p>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <p className="font-bold text-emerald-600 ml-2">{formatCurrency(p.amount)}</p>
+                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => startEditPayment(p)} title="עריכה">
+                          <Pencil size={13} />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500 hover:text-red-700 hover:bg-red-50" onClick={() => setDeletePaymentTarget(p)} title="מחיקה">
+                          <Trash2 size={13} />
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -465,7 +556,7 @@ export default function OrderDetailPage() {
                     </div>
                   ) : (
                     /* Display row */
-                    <div className="flex items-center justify-between text-sm bg-[#faf8f5] rounded-lg px-3 py-2 group">
+                    <div className="flex items-center justify-between text-sm bg-[#faf8f5] rounded-lg px-3 py-2">
                       <div className="flex items-center gap-2 min-w-0">
                         <button
                           onClick={() => handleToggleExpensePaid(expense)}
@@ -488,10 +579,10 @@ export default function OrderDetailPage() {
                         <p className={cn('font-bold ml-2', expense.is_paid ? 'text-[#7a6a52]' : 'text-amber-700')}>
                           {formatCurrency(expense.amount)}
                         </p>
-                        <Button variant="ghost" size="icon" className="opacity-0 group-hover:opacity-100 h-7 w-7" onClick={() => startEditExpense(expense)} title="עריכה">
+                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => startEditExpense(expense)} title="עריכה">
                           <Pencil size={13} />
                         </Button>
-                        <Button variant="ghost" size="icon" className="opacity-0 group-hover:opacity-100 h-7 w-7 text-red-500 hover:text-red-700 hover:bg-red-50" onClick={() => setDeleteExpenseTarget(expense)} title="מחיקה">
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500 hover:text-red-700 hover:bg-red-50" onClick={() => setDeleteExpenseTarget(expense)} title="מחיקה">
                           <Trash2 size={13} />
                         </Button>
                       </div>
@@ -561,6 +652,14 @@ export default function OrderDetailPage() {
         onConfirm={handleDeleteExpense}
         title="מחיקת הוצאה"
         description={`למחוק הוצאה של ${deleteExpenseTarget ? formatCurrency(deleteExpenseTarget.amount) : ''}?`}
+        confirmLabel="מחק"
+      />
+      <ConfirmDialog
+        open={!!deletePaymentTarget}
+        onClose={() => setDeletePaymentTarget(undefined)}
+        onConfirm={handleDeletePayment}
+        title="מחיקת תשלום"
+        description={`למחוק תשלום של ${deletePaymentTarget ? formatCurrency(deletePaymentTarget.amount) : ''}?`}
         confirmLabel="מחק"
       />
     </Shell>
