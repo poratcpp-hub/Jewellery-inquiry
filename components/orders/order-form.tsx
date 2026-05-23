@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { Dialog, DialogHeader, DialogBody, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -10,8 +10,9 @@ import { FormField, FormGrid, FormSection } from '@/components/ui/form-field'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { calculateOrderFinancials, formatCurrency, generateOrderNumber, getProfitColor } from '@/lib/utils'
 import { ORDER_STATUSES, PAYMENT_STATUSES, PRODUCTION_STATUSES, JEWELRY_TYPES, GOLD_TYPES, GOLD_COLORS, DIAMOND_TYPES, DIAMOND_ORIGINS, DIAMOND_CERTIFICATES } from '@/lib/constants'
-import type { Order, Customer, Supplier } from '@/lib/types'
+import { useUnsavedChanges } from '@/lib/hooks'
 import { cn } from '@/lib/utils'
+import type { Order, Customer, Supplier } from '@/lib/types'
 
 interface OrderFormProps {
   open: boolean
@@ -34,15 +35,13 @@ const makeDefaults = (): Partial<Order> => ({
 export function OrderForm({ open, onClose, order, customers, suppliers, onSave }: OrderFormProps) {
   const [form, setForm] = useState<Partial<Order>>(order || makeDefaults())
   const [errors, setErrors] = useState<Record<string, string>>({})
-  const isDirtyRef = useRef(false)
-  const [confirmClose, setConfirmClose] = useState(false)
+  const { isDirtyRef, confirmClose, setConfirmClose, markDirty, markClean, tryClose, confirmAndClose } = useUnsavedChanges(open)
 
   useEffect(() => {
     if (open) {
       setForm(order || makeDefaults())
       setErrors({})
-      isDirtyRef.current = false
-      setConfirmClose(false)
+      markClean()
     }
   }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -50,7 +49,7 @@ export function OrderForm({ open, onClose, order, customers, suppliers, onSave }
 
   const set = (key: keyof Order, value: string | number) => {
     setForm(f => ({ ...f, [key]: value }))
-    isDirtyRef.current = true
+    markDirty()
     if (errors[key as string]) setErrors(e => ({ ...e, [key]: '' }))
   }
 
@@ -65,17 +64,12 @@ export function OrderForm({ open, onClose, order, customers, suppliers, onSave }
   const handleSave = () => {
     if (!validate()) return
     const calcs = calculateOrderFinancials(form)
+    isDirtyRef.current = false
     onSave({ ...form, ...calcs })
     onClose()
   }
 
-  const handleClose = () => {
-    if (isDirtyRef.current) {
-      setConfirmClose(true)
-    } else {
-      onClose()
-    }
-  }
+  const handleClose = () => tryClose(onClose)
 
   return (
     <>
@@ -218,10 +212,12 @@ export function OrderForm({ open, onClose, order, customers, suppliers, onSave }
       <ConfirmDialog
         open={confirmClose}
         onClose={() => setConfirmClose(false)}
-        onConfirm={() => { setConfirmClose(false); onClose() }}
+        onConfirm={() => confirmAndClose(onClose)}
         title="יציאה ללא שמירה"
-        description="יש פרטים שלא נשמרו. האם לצאת?"
-        confirmLabel="צא ללא שמירה"
+        description="יש שינויים שלא נשמרו. לצאת בלי לשמור?"
+        confirmLabel="צא בלי לשמור"
+        cancelLabel="המשך עריכה"
+        variant="default"
       />
     </>
   )

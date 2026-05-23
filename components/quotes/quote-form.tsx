@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { Dialog, DialogHeader, DialogBody, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -10,8 +10,9 @@ import { FormField, FormGrid, FormSection } from '@/components/ui/form-field'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { calculateQuoteCosts, formatCurrency, generateQuoteNumber, getProfitColor } from '@/lib/utils'
 import { QUOTE_STATUSES } from '@/lib/constants'
-import type { Quote, Customer } from '@/lib/types'
+import { useUnsavedChanges } from '@/lib/hooks'
 import { cn } from '@/lib/utils'
+import type { Quote, Customer } from '@/lib/types'
 
 interface QuoteFormProps {
   open: boolean
@@ -52,15 +53,13 @@ const makeDefaults = (): Partial<Quote> => ({
 export function QuoteForm({ open, onClose, quote, customers, onSave }: QuoteFormProps) {
   const [form, setForm] = useState<Partial<Quote>>(quote || makeDefaults())
   const [errors, setErrors] = useState<Record<string, string>>({})
-  const isDirtyRef = useRef(false)
-  const [confirmClose, setConfirmClose] = useState(false)
+  const { isDirtyRef, confirmClose, setConfirmClose, markDirty, markClean, tryClose, confirmAndClose } = useUnsavedChanges(open)
 
   useEffect(() => {
     if (open) {
       setForm(quote || makeDefaults())
       setErrors({})
-      isDirtyRef.current = false
-      setConfirmClose(false)
+      markClean()
     }
   }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -68,7 +67,7 @@ export function QuoteForm({ open, onClose, quote, customers, onSave }: QuoteForm
 
   const set = (key: keyof Quote, value: string | number | boolean) => {
     setForm(f => ({ ...f, [key]: value }))
-    isDirtyRef.current = true
+    markDirty()
     if (errors[key as string]) setErrors(e => ({ ...e, [key]: '' }))
   }
 
@@ -83,17 +82,12 @@ export function QuoteForm({ open, onClose, quote, customers, onSave }: QuoteForm
   const handleSave = () => {
     if (!validate()) return
     const calcs = calculateQuoteCosts(form)
+    isDirtyRef.current = false
     onSave({ ...form, ...calcs })
     onClose()
   }
 
-  const handleClose = () => {
-    if (isDirtyRef.current) {
-      setConfirmClose(true)
-    } else {
-      onClose()
-    }
-  }
+  const handleClose = () => tryClose(onClose)
 
   return (
     <>
@@ -259,10 +253,12 @@ export function QuoteForm({ open, onClose, quote, customers, onSave }: QuoteForm
       <ConfirmDialog
         open={confirmClose}
         onClose={() => setConfirmClose(false)}
-        onConfirm={() => { setConfirmClose(false); onClose() }}
+        onConfirm={() => confirmAndClose(onClose)}
         title="יציאה ללא שמירה"
-        description="יש פרטים שלא נשמרו. האם לצאת?"
-        confirmLabel="צא ללא שמירה"
+        description="יש שינויים שלא נשמרו. לצאת בלי לשמור?"
+        confirmLabel="צא בלי לשמור"
+        cancelLabel="המשך עריכה"
+        variant="default"
       />
     </>
   )

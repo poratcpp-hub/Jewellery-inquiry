@@ -13,6 +13,8 @@ import { FormField, FormGrid, FormSection } from '@/components/ui/form-field'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { TableSkeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
+import { useUnsavedChanges } from '@/lib/hooks'
+import { isValidIsraeliMobilePhone, normalizeIsraeliPhone, PHONE_ERROR } from '@/lib/validation'
 import { getSuppliers, upsertSupplier, deleteSupplier } from '@/lib/data'
 import { SUPPLIER_CATEGORIES } from '@/lib/constants'
 import type { Supplier } from '@/lib/types'
@@ -46,66 +48,99 @@ function SupplierForm({ open, onClose, supplier, onSave }: {
   onSave: (data: Partial<Supplier>) => void
 }) {
   const [form, setForm] = useState<Partial<Supplier>>(supplier || {})
-  const [error, setError] = useState('')
-  const set = (k: keyof Supplier, v: string | number) => setForm(f => ({ ...f, [k]: v }))
+  const [errors, setErrors] = useState<Record<string, string>>({})
+  const { isDirtyRef, confirmClose, setConfirmClose, markDirty, markClean, tryClose, confirmAndClose } = useUnsavedChanges(open)
 
-  const handleSave = () => {
-    if (!form.name?.trim()) { setError('שם הספק הוא שדה חובה'); return }
-    onSave(form); onClose()
+  useEffect(() => {
+    if (open) { setForm(supplier || {}); setErrors({}); markClean() }
+  }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const set = (k: keyof Supplier, v: string | number) => {
+    setForm(f => ({ ...f, [k]: v }))
+    markDirty()
+    if (errors[k as string]) setErrors(e => ({ ...e, [k]: '' }))
   }
 
+  const handleSave = () => {
+    const e: Record<string, string> = {}
+    if (!form.name?.trim()) e.name = 'שם הספק הוא שדה חובה'
+    const phone = form.phone?.trim() || ''
+    if (phone && !isValidIsraeliMobilePhone(phone)) e.phone = PHONE_ERROR
+    setErrors(e)
+    if (Object.keys(e).length > 0) return
+    const normalized = phone ? normalizeIsraeliPhone(phone) : phone
+    isDirtyRef.current = false
+    onSave({ ...form, phone: normalized || undefined })
+    onClose()
+  }
+
+  const handleClose = () => tryClose(onClose)
+
   return (
-    <Dialog open={open} onClose={onClose} className="max-w-xl mx-4">
-      <DialogHeader title={supplier ? 'עריכת ספק' : 'ספק חדש'} onClose={onClose} />
-      <DialogBody className="space-y-5">
-        <FormSection title="פרטי ספק">
-          <FormField label="שם הספק" required error={error} htmlFor="sup_name">
-            <Input id="sup_name" value={form.name || ''} onChange={e => { set('name', e.target.value); setError('') }} placeholder="שם הספק" />
-          </FormField>
-          <FormGrid>
-            <FormField label="איש קשר" htmlFor="sup_contact">
-              <Input id="sup_contact" value={form.contact_name || ''} onChange={e => set('contact_name', e.target.value)} placeholder="שם איש קשר" />
+    <>
+      <Dialog open={open} onClose={handleClose} className="max-w-xl mx-4">
+        <DialogHeader title={supplier ? 'עריכת ספק' : 'ספק חדש'} onClose={handleClose} />
+        <DialogBody className="space-y-5">
+          <FormSection title="פרטי ספק">
+            <FormField label="שם הספק" required error={errors.name} htmlFor="sup_name">
+              <Input id="sup_name" value={form.name || ''} onChange={e => set('name', e.target.value)} placeholder="שם הספק" error={!!errors.name} />
             </FormField>
-            <FormField label="טלפון" htmlFor="sup_phone">
-              <Input id="sup_phone" value={form.phone || ''} onChange={e => set('phone', e.target.value)} placeholder="03-0000000" />
-            </FormField>
-            <FormField label="קטגוריה" htmlFor="sup_category">
-              <Select id="sup_category" value={form.category || ''} onChange={e => set('category', e.target.value)}>
-                <option value="">בחר קטגוריה</option>
-                {SUPPLIER_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-              </Select>
-            </FormField>
-            <FormField label="מיקום" htmlFor="sup_location">
-              <Input id="sup_location" value={form.location || ''} onChange={e => set('location', e.target.value)} placeholder="עיר / אזור" />
-            </FormField>
-            <FormField label="זמן אספקה" htmlFor="sup_delivery">
-              <Input id="sup_delivery" value={form.delivery_time || ''} onChange={e => set('delivery_time', e.target.value)} placeholder="3-5 ימי עסקים" />
-            </FormField>
-          </FormGrid>
-        </FormSection>
-        <FormSection title="דירוג">
-          <div className="space-y-3">
-            {[
-              { label: 'איכות', key: 'quality_rating' as keyof Supplier },
-              { label: 'אמינות', key: 'reliability_rating' as keyof Supplier },
-              { label: 'מחיר', key: 'price_rating' as keyof Supplier },
-            ].map(({ label, key }) => (
-              <div key={key} className="flex items-center justify-between">
-                <span className="text-sm text-[#4a3728]">{label}</span>
-                <StarRating value={(form[key] as number) || 0} onChange={v => set(key, v)} />
-              </div>
-            ))}
-          </div>
-        </FormSection>
-        <FormSection title="הערות">
-          <Textarea value={form.notes || ''} onChange={e => set('notes', e.target.value)} placeholder="הערות על הספק..." rows={3} />
-        </FormSection>
-      </DialogBody>
-      <DialogFooter>
-        <Button variant="outline" onClick={onClose}>ביטול</Button>
-        <Button onClick={handleSave}>{supplier ? 'שמור שינויים' : 'הוסף ספק'}</Button>
-      </DialogFooter>
-    </Dialog>
+            <FormGrid>
+              <FormField label="איש קשר" htmlFor="sup_contact">
+                <Input id="sup_contact" value={form.contact_name || ''} onChange={e => set('contact_name', e.target.value)} placeholder="שם איש קשר" />
+              </FormField>
+              <FormField label="טלפון" error={errors.phone} htmlFor="sup_phone">
+                <Input id="sup_phone" value={form.phone || ''} onChange={e => set('phone', e.target.value)} placeholder="0500000000" error={!!errors.phone} />
+              </FormField>
+              <FormField label="קטגוריה" htmlFor="sup_category">
+                <Select id="sup_category" value={form.category || ''} onChange={e => set('category', e.target.value)}>
+                  <option value="">בחר קטגוריה</option>
+                  {SUPPLIER_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                </Select>
+              </FormField>
+              <FormField label="מיקום" htmlFor="sup_location">
+                <Input id="sup_location" value={form.location || ''} onChange={e => set('location', e.target.value)} placeholder="עיר / אזור" />
+              </FormField>
+              <FormField label="זמן אספקה" htmlFor="sup_delivery">
+                <Input id="sup_delivery" value={form.delivery_time || ''} onChange={e => set('delivery_time', e.target.value)} placeholder="3-5 ימי עסקים" />
+              </FormField>
+            </FormGrid>
+          </FormSection>
+          <FormSection title="דירוג">
+            <div className="space-y-3">
+              {[
+                { label: 'איכות', key: 'quality_rating' as keyof Supplier },
+                { label: 'אמינות', key: 'reliability_rating' as keyof Supplier },
+                { label: 'מחיר', key: 'price_rating' as keyof Supplier },
+              ].map(({ label, key }) => (
+                <div key={key} className="flex items-center justify-between">
+                  <span className="text-sm text-[#4a3728]">{label}</span>
+                  <StarRating value={(form[key] as number) || 0} onChange={v => set(key, v)} />
+                </div>
+              ))}
+            </div>
+          </FormSection>
+          <FormSection title="הערות">
+            <Textarea value={form.notes || ''} onChange={e => set('notes', e.target.value)} placeholder="הערות על הספק..." rows={3} />
+          </FormSection>
+        </DialogBody>
+        <DialogFooter>
+          <Button variant="outline" onClick={handleClose}>ביטול</Button>
+          <Button onClick={handleSave}>{supplier ? 'שמור שינויים' : 'הוסף ספק'}</Button>
+        </DialogFooter>
+      </Dialog>
+
+      <ConfirmDialog
+        open={confirmClose}
+        onClose={() => setConfirmClose(false)}
+        onConfirm={() => confirmAndClose(onClose)}
+        title="יציאה ללא שמירה"
+        description="יש שינויים שלא נשמרו. לצאת בלי לשמור?"
+        confirmLabel="צא בלי לשמור"
+        cancelLabel="המשך עריכה"
+        variant="default"
+      />
+    </>
   )
 }
 
