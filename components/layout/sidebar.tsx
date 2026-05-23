@@ -12,6 +12,7 @@ import {
   TrendingUp,
   Truck,
   Settings,
+  Calendar,
   X,
   Plus,
 } from 'lucide-react'
@@ -25,6 +26,7 @@ const navItems = [
   { href: '/orders', label: 'הזמנות', icon: ShoppingBag },
   { href: '/financials', label: 'הכנסות והוצאות', icon: TrendingUp },
   { href: '/suppliers', label: 'ספקים', icon: Truck },
+  { href: '/calendar', label: 'לוח מסירות', icon: Calendar },
   { href: '/settings', label: 'הגדרות', icon: Settings },
 ]
 
