@@ -1,4 +1,5 @@
 import * as React from 'react'
+import { ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export function Table({ className, ...props }: React.HTMLAttributes<HTMLTableElement>) {
@@ -35,7 +36,7 @@ export function TableHead({ className, ...props }: React.ThHTMLAttributes<HTMLTa
   return (
     <th
       className={cn(
-        'h-10 px-4 text-right text-xs font-semibold text-[#7a6a52] uppercase tracking-wide align-middle bg-[#faf8f5]',
+        'h-11 px-4 text-right text-xs font-semibold text-[#7a6a52] uppercase tracking-wide align-middle bg-[#faf8f5] whitespace-nowrap',
         className
       )}
       {...props}
@@ -46,9 +47,37 @@ export function TableHead({ className, ...props }: React.ThHTMLAttributes<HTMLTa
 export function TableCell({ className, ...props }: React.TdHTMLAttributes<HTMLTableCellElement>) {
   return (
     <td
-      className={cn('px-4 py-3 text-sm text-[#2c1810] align-middle', className)}
+      className={cn('px-4 py-3.5 text-sm text-[#2c1810] align-middle', className)}
       {...props}
     />
+  )
+}
+
+interface SortableHeadProps extends React.ThHTMLAttributes<HTMLTableCellElement> {
+  sortKey?: string
+  activeSortKey?: string | null
+  sortDir?: 'asc' | 'desc'
+  onSort?: (key: string) => void
+}
+
+export function SortableHead({ children, sortKey, activeSortKey, sortDir, onSort, className, ...props }: SortableHeadProps) {
+  const isActive = sortKey && activeSortKey === sortKey
+  const Icon = !isActive ? ChevronsUpDown : sortDir === 'asc' ? ChevronUp : ChevronDown
+  return (
+    <th
+      className={cn(
+        'h-11 px-4 text-right text-xs font-semibold text-[#7a6a52] uppercase tracking-wide align-middle bg-[#faf8f5] whitespace-nowrap',
+        sortKey && 'cursor-pointer select-none hover:text-[#2c1810]',
+        className
+      )}
+      onClick={() => sortKey && onSort?.(sortKey)}
+      {...props}
+    >
+      <span className="flex items-center gap-1 justify-end">
+        {children}
+        {sortKey && <Icon size={12} className={isActive ? 'text-[#b8934a]' : 'text-[#c5b8a0]'} />}
+      </span>
+    </th>
   )
 }
 
