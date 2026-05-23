@@ -581,6 +581,29 @@ export async function insertExpense(expense: Partial<Expense>): Promise<Expense>
   return data as Expense
 }
 
+export async function upsertExpense(expense: Partial<Expense>): Promise<Expense> {
+  if (IS_DEMO) return { ...expense, id: expense.id || crypto.randomUUID(), amount: expense.amount ?? 0, expense_date: expense.expense_date || new Date().toISOString().split('T')[0], is_paid: expense.is_paid ?? false, created_at: '' } as Expense
+  const payload: Record<string, unknown> = {
+    order_id: expense.order_id || null,
+    supplier_id: expense.supplier_id || null,
+    expense_type: expense.expense_type || null,
+    amount: Number(expense.amount ?? 0),
+    expense_date: expense.expense_date || new Date().toISOString().split('T')[0],
+    is_paid: expense.is_paid ?? false,
+    notes: expense.notes || null,
+  }
+  if (expense.id) payload.id = expense.id
+  const { data, error } = await supabase.from('expenses').upsert(payload).select().single()
+  if (error) { logSupabaseError('upsertExpense', error); throw error }
+  return data as Expense
+}
+
+export async function deleteExpense(id: string): Promise<void> {
+  if (IS_DEMO) return
+  const { error } = await supabase.from('expenses').delete().eq('id', id)
+  if (error) { logSupabaseError('deleteExpense', error); throw error }
+}
+
 // ─── Suppliers ───────────────────────────────────────────────────────────────
 
 export async function getSuppliers(): Promise<Supplier[]> {
