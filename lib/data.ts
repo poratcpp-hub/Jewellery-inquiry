@@ -11,10 +11,6 @@ import type {
   Customer, Lead, Quote, Order, Payment, Expense, Supplier, DashboardMetrics, Task,
 } from './types'
 
-if (typeof window !== 'undefined') {
-  console.log('[DEBUG FIX ACTIVE] dashboard quotes/orders refactor loaded')
-}
-
 const IS_DEMO =
   process.env.NEXT_PUBLIC_DEMO_MODE === 'true' ||
   !process.env.NEXT_PUBLIC_SUPABASE_URL ||
@@ -24,7 +20,7 @@ const IS_DEMO =
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function logSupabaseError(context: string, error: any) {
-  console.error(`[Supabase] ❌ ${context}`, {
+  const structured = {
     message: error?.message,
     code: error?.code,
     details: error?.details,
@@ -32,7 +28,14 @@ export function logSupabaseError(context: string, error: any) {
     status: error?.status,
     name: error?.name,
     raw: error,
-  })
+  }
+  console.error(`[Supabase] ❌ ${context}`, structured)
+  // Second line as serialised string — prevents the browser collapsing the object as "Object"
+  try {
+    console.error(`[Supabase] ❌ ${context} →`, JSON.stringify(structured))
+  } catch {
+    console.error(`[Supabase] ❌ ${context} →`, String(error))
+  }
 }
 
 // ─── Join helpers ─────────────────────────────────────────────────────────────

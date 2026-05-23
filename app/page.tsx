@@ -1,9 +1,5 @@
 'use client'
 
-if (typeof window !== 'undefined') {
-  console.log('[DEBUG FIX ACTIVE] dashboard quotes/orders refactor loaded')
-}
-
 import { useEffect, useState, useMemo } from 'react'
 import { Shell } from '@/components/layout/shell'
 import { MetricCard } from '@/components/dashboard/metric-card'
@@ -14,7 +10,7 @@ import { useToast } from '@/components/ui/toast'
 import Link from 'next/link'
 import { TrendingUp, TrendingDown, DollarSign, ShoppingBag, FileText, Target, AlertCircle, Calendar, ArrowLeft, AlertTriangle, Clock, WifiOff } from 'lucide-react'
 import { formatCurrency, formatDate } from '@/lib/utils'
-import { getPayments, getExpenses, getLeads, getQuotes, getOrders, getCustomers, checkDatabaseConnection, logSupabaseError } from '@/lib/data'
+import { getPayments, getExpenses, getLeads, getCustomers, checkDatabaseConnection, logSupabaseError } from '@/lib/data'
 import { supabase } from '@/lib/supabase'
 import type { DashboardMetrics, Order, Lead, Quote } from '@/lib/types'
 import { CLOSED_ORDER_STATUSES, CLOSED_QUOTE_STATUSES, CLOSED_LEAD_STATUSES } from '@/lib/constants'
@@ -185,68 +181,68 @@ export default function DashboardPage() {
   const [dbError, setDbError] = useState<string | null>(null)
 
   useEffect(() => {
+    console.log('[DEBUG FIX ACTIVE] quotes/orders simple queries loaded')
+
     const load = async () => {
-      // Step 1: DB health check — surfaces the exact error for customers
+      // ── 1. customers health check ────────────────────────────────────────────
       const health = await checkDatabaseConnection()
       if (!health.ok) {
         logSupabaseError('Dashboard DB health check failed', { message: health.error })
         setDbError(health.error ?? 'שגיאה לא ידועה')
         setMetrics(EMPTY_METRICS)
         toast({ type: 'error', title: 'שגיאה בטעינת הדשבורד. בדוק חיבור למסד הנתונים.' })
-        setLoading(false)
         return
       }
 
-      // Step 2: explicit quotes/orders simple health checks
-      const { data: quotesHealth, error: quotesHealthError } = await supabase
-        .from('quotes').select('id').limit(1)
-      if (quotesHealthError) {
-        logSupabaseError('quotes simple health check failed', quotesHealthError)
+      // ── 2. quotes — direct query, no lib/data wrapper, no joins ─────────────
+      const { data: quotesData, error: quotesErr } = await supabase
+        .from('quotes')
+        .select('id, quote_status, sale_price, expected_profit, valid_until, quote_number, created_at')
+        .order('created_at', { ascending: false })
+      if (quotesErr) {
+        logSupabaseError('quotes simple query failed', quotesErr)
       } else {
-        console.log('[Supabase] ✅ quotes simple query OK', quotesHealth)
+        console.log('[Supabase] ✅ quotes simple query OK —', quotesData?.length ?? 0, 'rows')
       }
+      const quotes = (quotesData ?? []) as Quote[]
 
-      const { data: ordersHealth, error: ordersHealthError } = await supabase
-        .from('orders').select('id').limit(1)
-      if (ordersHealthError) {
-        logSupabaseError('orders simple health check failed', ordersHealthError)
+      // ── 3. orders — direct query, no lib/data wrapper, no joins ─────────────
+      const { data: ordersData, error: ordersErr } = await supabase
+        .from('orders')
+        .select('id, order_number, order_status, payment_status, sale_price, net_profit, balance_due, delivery_date, customer_id, created_at')
+        .order('created_at', { ascending: false })
+      if (ordersErr) {
+        logSupabaseError('orders simple query failed', ordersErr)
       } else {
-        console.log('[Supabase] ✅ orders simple query OK', ordersHealth)
+        console.log('[Supabase] ✅ orders simple query OK —', ordersData?.length ?? 0, 'rows')
       }
+      const orders = (ordersData ?? []) as Order[]
 
-      // Step 3: load all data in parallel, tolerating partial failures
-      const [paymentsR, expensesR, leadsR, quotesR, ordersR, customersR] = await Promise.allSettled([
-        getPayments(), getExpenses(), getLeads(), getQuotes(), getOrders(), getCustomers(),
+      // ── 4. remaining tables via lib/data helpers ─────────────────────────────
+      const [paymentsR, expensesR, leadsR, customersR] = await Promise.allSettled([
+        getPayments(), getExpenses(), getLeads(), getCustomers(),
       ])
-
       const payments  = paymentsR.status  === 'fulfilled' ? paymentsR.value  : []
       const expenses  = expensesR.status  === 'fulfilled' ? expensesR.value  : []
       const leads     = leadsR.status     === 'fulfilled' ? leadsR.value     : []
-      const quotes    = quotesR.status    === 'fulfilled' ? quotesR.value    : []
-      const orders    = ordersR.status    === 'fulfilled' ? ordersR.value    : []
       const customers = customersR.status === 'fulfilled' ? customersR.value : []
 
-      // Log any individual full-query failures via logSupabaseError
-      const results = [
+      ;[
         { name: 'payments',  r: paymentsR  },
         { name: 'expenses',  r: expensesR  },
         { name: 'leads',     r: leadsR     },
-        { name: 'quotes',    r: quotesR    },
-        { name: 'orders',    r: ordersR    },
         { name: 'customers', r: customersR },
-      ]
-      results.forEach(({ name, r }) => {
-        if (r.status === 'rejected') {
-          logSupabaseError(`Dashboard query "${name}" failed`, r.reason)
-        }
+      ].forEach(({ name, r }) => {
+        if (r.status === 'rejected') logSupabaseError(`${name} query failed`, r.reason)
       })
 
+      // ── 5. compute metrics ───────────────────────────────────────────────────
       const now = new Date()
       const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
       const twoWeeks = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000)
 
       const custMap = Object.fromEntries(customers.map(c => [c.id, c]))
-      const enrichedOrders = orders.map(o => ({ ...o, customers: custMap[o.customer_id || ''] || o.customers }))
+      const enrichedOrders = orders.map(o => ({ ...o, customers: custMap[o.customer_id || ''] }))
 
       const monthlyRevenue = payments
         .filter(p => p.is_paid && new Date(p.payment_date) >= monthStart)
@@ -269,7 +265,7 @@ export default function DashboardPage() {
         inProduction: enrichedOrders.filter(o => o.order_status === 'בייצור' || o.order_status === 'הועבר לייצור').length,
         unpaidBalance: enrichedOrders
           .filter(o => o.payment_status !== 'שולם במלואו')
-          .reduce((s, o) => s + o.balance_due, 0),
+          .reduce((s, o) => s + (o.balance_due ?? 0), 0),
         upcomingDeliveries: enrichedOrders.filter(o => {
           if (!o.delivery_date || CLOSED_ORDER_STATUSES.has(o.order_status)) return false
           const d = new Date(o.delivery_date)
