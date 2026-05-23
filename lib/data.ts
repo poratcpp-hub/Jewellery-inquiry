@@ -1,7 +1,6 @@
 /**
- * Data access layer.
- * When NEXT_PUBLIC_DEMO_MODE=true (or Supabase env vars are absent), all reads
- * return in-memory demo data so the app works without a database.
+ * Data access layer — v3 (no embedded joins, logSupabaseError exported)
+ * NEXT_PUBLIC_DEMO_MODE=true → all reads return in-memory demo data.
  */
 import { supabase } from './supabase'
 import {
@@ -12,49 +11,43 @@ import type {
   Customer, Lead, Quote, Order, Payment, Expense, Supplier, DashboardMetrics, Task,
 } from './types'
 
+if (typeof window !== 'undefined') {
+  // If you see this line, the new build is running.
+  console.log('[DEBUG VERSION] data layer v3 loaded — logSupabaseError, no embedded joins')
+}
+
 const IS_DEMO =
   process.env.NEXT_PUBLIC_DEMO_MODE === 'true' ||
   !process.env.NEXT_PUBLIC_SUPABASE_URL ||
   process.env.NEXT_PUBLIC_SUPABASE_URL === 'https://placeholder.supabase.co'
 
-function logQueryError(
-  table: string,
-  error: { message?: string; code?: string; details?: string; hint?: string; status?: number },
-) {
-  const isHostError = error.message?.includes('Host not in allowlist')
-  if (isHostError) {
-    console.error(
-      `[Supabase] ❌ "${table}" → Host not in allowlist\n` +
-      `  Your key requires a host allowlist. Fix:\n` +
-      `  1. Use the "anon public" JWT key (eyJ...) from Supabase → Project Settings → API, OR\n` +
-      `  2. Add your domain/localhost to the publishable key allowlist`
-    )
-  } else {
-    // Log as a flat string so it's always readable (never collapses to "[Object]")
-    console.error(
-      `[Supabase] ❌ "${table}" failed` +
-      ` | message: ${error.message ?? '—'}` +
-      ` | code: ${error.code ?? '—'}` +
-      ` | status: ${error.status ?? '—'}` +
-      ` | details: ${error.details ?? '—'}` +
-      ` | hint: ${error.hint ?? '—'}`
-    )
-  }
+// ─── Error logging ────────────────────────────────────────────────────────────
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function logSupabaseError(context: string, error: any) {
+  console.error(`[Supabase] ❌ ${context}`, {
+    message: error?.message,
+    code: error?.code,
+    details: error?.details,
+    hint: error?.hint,
+    status: error?.status,
+    name: error?.name,
+    raw: error,
+  })
 }
 
 // ─── Join helpers ─────────────────────────────────────────────────────────────
-// These avoid PGRST201 "ambiguous relationship" errors that occur when two tables
-// have multiple FK references to each other (e.g. quotes↔leads, orders↔quotes).
 
-function uniqueIds<T>(records: T[], key: keyof T): string[] {
-  return [...new Set(records.map((r: T) => r[key] as unknown as string).filter(Boolean))]
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function uniqueIds<T>(records: T[], key: keyof T): string[] {
+  return [...new Set(records.map((r) => r[key] as unknown as string).filter(Boolean))]
 }
 
-function mapById<T extends { id: string }>(records: T[] = []): Map<string, T> {
+export function mapById<T extends { id: string }>(records: T[] = []): Map<string, T> {
   return new Map(records.map(r => [r.id, r]))
 }
 
-async function fetchByIds<T>(
+export async function fetchByIds<T>(
   table: string,
   ids: string[],
   columns = '*',
@@ -62,7 +55,7 @@ async function fetchByIds<T>(
   if (!ids.length) return []
   const { data, error } = await supabase.from(table).select(columns).in('id', ids)
   if (error) {
-    console.error(`[Supabase] fetchByIds failed for ${table}:`, error)
+    logSupabaseError(`fetchByIds on "${table}"`, error)
     return []
   }
   return (data ?? []) as T[]
@@ -70,13 +63,17 @@ async function fetchByIds<T>(
 
 // ─── Database health check ────────────────────────────────────────────────────
 
-export async function checkDatabaseConnection(): Promise<{ ok: boolean; error?: string; isHostError?: boolean }> {
+export async function checkDatabaseConnection(): Promise<{
+  ok: boolean
+  error?: string
+  isHostError?: boolean
+}> {
   if (IS_DEMO) return { ok: true }
 
-  // Check customers first — fast gate on basic connectivity
+  // Gate: customers must work first
   const { error: custErr } = await supabase.from('customers').select('id').limit(1)
   if (custErr) {
-    logQueryError('customers', custErr)
+    logSupabaseError('customers health check', custErr)
     return {
       ok: false,
       error: custErr.message,
@@ -85,20 +82,18 @@ export async function checkDatabaseConnection(): Promise<{ ok: boolean; error?: 
   }
   console.log('[Supabase] ✅ DB connection OK, customers table accessible')
 
-  // Probe all other tables in parallel so the console shows exactly which ones fail
-  const tables = ['leads', 'quotes', 'orders', 'payments', 'expenses', 'suppliers'] as const
-  const probes = await Promise.allSettled(
-    tables.map(t => supabase.from(t).select('id').limit(1).then((r: { error: { message?: string; code?: string; details?: string; hint?: string; status?: number } | null }) => ({ t, error: r.error })))
+  // Probe all other tables in parallel — each logs its own result
+  const probeTargets = ['leads', 'quotes', 'orders', 'payments', 'expenses', 'suppliers'] as const
+  await Promise.allSettled(
+    probeTargets.map(async t => {
+      const { error } = await supabase.from(t).select('id').limit(1)
+      if (error) {
+        logSupabaseError(`${t} health check`, error)
+      } else {
+        console.log(`[Supabase] ✅ ${t} simple query OK`)
+      }
+    })
   )
-  for (const probe of probes) {
-    if (probe.status === 'rejected') continue
-    const { t, error } = probe.value
-    if (error) {
-      logQueryError(t, error)
-    } else {
-      console.log(`[Supabase] ✅ ${t} table accessible`)
-    }
-  }
 
   return { ok: true }
 }
@@ -107,14 +102,17 @@ export async function checkDatabaseConnection(): Promise<{ ok: boolean; error?: 
 
 export async function getCustomers(): Promise<Customer[]> {
   if (IS_DEMO) return demoCustomers.map(c => ({ ...c, created_at: '', updated_at: '' }))
-  const { data, error } = await supabase.from('customers').select('*').order('created_at', { ascending: false })
-  if (error) { logQueryError('customers', error); throw error }
+  const { data, error } = await supabase
+    .from('customers')
+    .select('*')
+    .order('created_at', { ascending: false })
+  if (error) { logSupabaseError('getCustomers', error); throw error }
   return data as Customer[]
 }
 
 export async function upsertCustomer(customer: Partial<Customer>): Promise<Customer> {
   if (IS_DEMO) return { ...customer, id: customer.id || crypto.randomUUID(), created_at: '', updated_at: '' } as Customer
-  const { orders: _orders, converted_leads: _leads, ...rest } = customer as Customer & { orders?: unknown; converted_leads?: unknown }
+  const { orders: _o, converted_leads: _l, ...rest } = customer as Customer & { orders?: unknown; converted_leads?: unknown }
   const payload: Record<string, unknown> = {
     full_name: rest.full_name,
     phone: rest.phone || null,
@@ -134,14 +132,14 @@ export async function upsertCustomer(customer: Partial<Customer>): Promise<Custo
   if (rest.first_order_date !== undefined) payload.first_order_date = rest.first_order_date || null
   if (rest.last_order_date !== undefined) payload.last_order_date = rest.last_order_date || null
   const { data, error } = await supabase.from('customers').upsert(payload).select().single()
-  if (error) { console.error('[upsertCustomer] Supabase error:', error); throw error }
+  if (error) { logSupabaseError('upsertCustomer', error); throw error }
   return data as Customer
 }
 
 export async function deleteCustomer(id: string): Promise<void> {
   if (IS_DEMO) return
   const { error } = await supabase.from('customers').delete().eq('id', id)
-  if (error) throw error
+  if (error) { logSupabaseError('deleteCustomer', error); throw error }
 }
 
 // ─── Leads ───────────────────────────────────────────────────────────────────
@@ -152,7 +150,7 @@ export async function getLeads(): Promise<Lead[]> {
     .from('leads')
     .select('*')
     .order('created_at', { ascending: false })
-  if (error) { logQueryError('leads', error); throw error }
+  if (error) { logSupabaseError('getLeads', error); throw error }
   return data as Lead[]
 }
 
@@ -184,16 +182,15 @@ export async function upsertLead(lead: Partial<Lead>): Promise<Lead> {
   if (rest.id) payload.id = rest.id
   if (rest.quote_id !== undefined) payload.quote_id = rest.quote_id || null
   if (rest.order_id !== undefined) payload.order_id = rest.order_id || null
-
   const { data, error } = await supabase.from('leads').upsert(payload).select().single()
-  if (error) { console.error('[upsertLead] Supabase error:', error); throw error }
+  if (error) { logSupabaseError('upsertLead', error); throw error }
   return data as Lead
 }
 
 export async function deleteLead(id: string): Promise<void> {
   if (IS_DEMO) return
   const { error } = await supabase.from('leads').delete().eq('id', id)
-  if (error) throw error
+  if (error) { logSupabaseError('deleteLead', error); throw error }
 }
 
 export async function getLead(id: string): Promise<Lead> {
@@ -203,14 +200,13 @@ export async function getLead(id: string): Promise<Lead> {
     const customer = demoCustomers.find(c => c.id === lead.customer_id)
     const linkedQuote = lead.quote_id ? demoQuotes.find(q => q.id === lead.quote_id) : undefined
     return {
-      ...lead,
-      created_at: '', updated_at: '',
+      ...lead, created_at: '', updated_at: '',
       customers: customer ? { ...customer, created_at: '', updated_at: '' } : undefined,
       quotes: linkedQuote ? { ...linkedQuote, created_at: '', updated_at: '' } : undefined,
     } as Lead
   }
   const { data, error } = await supabase.from('leads').select('*').eq('id', id).single()
-  if (error) throw error
+  if (error) { logSupabaseError('getLead', error); throw error }
   const lead = data as Lead
   const [customerResult, quoteResult] = await Promise.all([
     lead.customer_id
@@ -263,12 +259,22 @@ export async function getQuotes(): Promise<Quote[]> {
     .from('quotes')
     .select('*')
     .order('created_at', { ascending: false })
-  if (error) { logQueryError('quotes', error); throw error }
+  if (error) { logSupabaseError('getQuotes', error); throw error }
   return data as Quote[]
 }
 
 export async function upsertQuote(quote: Partial<Quote>): Promise<Quote> {
-  if (IS_DEMO) return { ...quote, id: quote.id || crypto.randomUUID(), quote_status: quote.quote_status || 'טיוטה', diamond_cost: quote.diamond_cost ?? 0, gold_cost: quote.gold_cost ?? 0, labor_cost: quote.labor_cost ?? 0, setting_cost: quote.setting_cost ?? 0, packaging_cost: quote.packaging_cost ?? 0, shipping_cost: quote.shipping_cost ?? 0, other_cost: quote.other_cost ?? 0, total_cost: quote.total_cost ?? 0, sale_price: quote.sale_price ?? 0, expected_profit: quote.expected_profit ?? 0, profit_margin: quote.profit_margin ?? 0, created_at: '', updated_at: '' } as Quote
+  if (IS_DEMO) return {
+    ...quote,
+    id: quote.id || crypto.randomUUID(),
+    quote_status: quote.quote_status || 'טיוטה',
+    diamond_cost: quote.diamond_cost ?? 0, gold_cost: quote.gold_cost ?? 0,
+    labor_cost: quote.labor_cost ?? 0, setting_cost: quote.setting_cost ?? 0,
+    packaging_cost: quote.packaging_cost ?? 0, shipping_cost: quote.shipping_cost ?? 0,
+    other_cost: quote.other_cost ?? 0, total_cost: quote.total_cost ?? 0,
+    sale_price: quote.sale_price ?? 0, expected_profit: quote.expected_profit ?? 0,
+    profit_margin: quote.profit_margin ?? 0, created_at: '', updated_at: '',
+  } as Quote
   const { customers: _c, leads: _l, ...rest } = quote as Quote & { customers?: unknown; leads?: unknown }
   const payload: Record<string, unknown> = {
     quote_number: rest.quote_number,
@@ -304,16 +310,15 @@ export async function upsertQuote(quote: Partial<Quote>): Promise<Quote> {
   Object.keys(payload).forEach(k => payload[k] === undefined && delete payload[k])
   if (rest.id) payload.id = rest.id
   if (rest.order_id !== undefined) payload.order_id = rest.order_id || null
-
   const { data, error } = await supabase.from('quotes').upsert(payload).select().single()
-  if (error) { console.error('[upsertQuote] Supabase error:', error); throw error }
+  if (error) { logSupabaseError('upsertQuote', error); throw error }
   return data as Quote
 }
 
 export async function deleteQuote(id: string): Promise<void> {
   if (IS_DEMO) return
   const { error } = await supabase.from('quotes').delete().eq('id', id)
-  if (error) throw error
+  if (error) { logSupabaseError('deleteQuote', error); throw error }
 }
 
 // ─── Orders ──────────────────────────────────────────────────────────────────
@@ -324,12 +329,21 @@ export async function getOrders(): Promise<Order[]> {
     .from('orders')
     .select('*')
     .order('created_at', { ascending: false })
-  if (error) { logQueryError('orders', error); throw error }
+  if (error) { logSupabaseError('getOrders', error); throw error }
   return data as Order[]
 }
 
 export async function upsertOrder(order: Partial<Order>): Promise<Order> {
-  if (IS_DEMO) return { ...order, id: order.id || crypto.randomUUID(), order_status: order.order_status || 'מחכה למקדמה', payment_status: order.payment_status || 'לא שולם', sale_price: order.sale_price ?? 0, deposit_amount: order.deposit_amount ?? 0, balance_due: order.balance_due ?? 0, total_cost: order.total_cost ?? 0, net_profit: order.net_profit ?? 0, profit_margin: order.profit_margin ?? 0, created_at: '', updated_at: '' } as Order
+  if (IS_DEMO) return {
+    ...order,
+    id: order.id || crypto.randomUUID(),
+    order_status: order.order_status || 'מחכה למקדמה',
+    payment_status: order.payment_status || 'לא שולם',
+    sale_price: order.sale_price ?? 0, deposit_amount: order.deposit_amount ?? 0,
+    balance_due: order.balance_due ?? 0, total_cost: order.total_cost ?? 0,
+    net_profit: order.net_profit ?? 0, profit_margin: order.profit_margin ?? 0,
+    created_at: '', updated_at: '',
+  } as Order
   const payload: Record<string, unknown> = {
     order_number: order.order_number,
     customer_id: order.customer_id || null,
@@ -360,16 +374,15 @@ export async function upsertOrder(order: Partial<Order>): Promise<Order> {
   if (order.lead_id !== undefined) payload.lead_id = order.lead_id || null
   if (order.carat !== undefined) payload.carat = Number(order.carat)
   if (order.production_notes !== undefined) payload.production_notes = order.production_notes || null
-
   const { data, error } = await supabase.from('orders').upsert(payload).select().single()
-  if (error) { console.error('[upsertOrder] Supabase error:', error); throw error }
+  if (error) { logSupabaseError('upsertOrder', error); throw error }
   return data as Order
 }
 
 export async function deleteOrder(id: string): Promise<void> {
   if (IS_DEMO) return
   const { error } = await supabase.from('orders').delete().eq('id', id)
-  if (error) throw error
+  if (error) { logSupabaseError('deleteOrder', error); throw error }
 }
 
 // ─── Payments ────────────────────────────────────────────────────────────────
@@ -380,14 +393,14 @@ export async function getPayments(): Promise<Payment[]> {
     .from('payments')
     .select('*')
     .order('payment_date', { ascending: false })
-  if (error) { logQueryError('payments', error); throw error }
+  if (error) { logSupabaseError('getPayments', error); throw error }
   return data as Payment[]
 }
 
 export async function insertPayment(payment: Partial<Payment>): Promise<Payment> {
   if (IS_DEMO) return { ...payment, id: crypto.randomUUID(), amount: 0, payment_date: new Date().toISOString().split('T')[0], is_paid: true, created_at: '' } as Payment
   const { data, error } = await supabase.from('payments').insert(payment).select().single()
-  if (error) throw error
+  if (error) { logSupabaseError('insertPayment', error); throw error }
   return data as Payment
 }
 
@@ -399,14 +412,14 @@ export async function getExpenses(): Promise<Expense[]> {
     .from('expenses')
     .select('*')
     .order('expense_date', { ascending: false })
-  if (error) { logQueryError('expenses', error); throw error }
+  if (error) { logSupabaseError('getExpenses', error); throw error }
   return data as Expense[]
 }
 
 export async function insertExpense(expense: Partial<Expense>): Promise<Expense> {
   if (IS_DEMO) return { ...expense, id: crypto.randomUUID(), amount: 0, expense_date: new Date().toISOString().split('T')[0], is_paid: true, created_at: '' } as Expense
   const { data, error } = await supabase.from('expenses').insert(expense).select().single()
-  if (error) throw error
+  if (error) { logSupabaseError('insertExpense', error); throw error }
   return data as Expense
 }
 
@@ -415,21 +428,21 @@ export async function insertExpense(expense: Partial<Expense>): Promise<Expense>
 export async function getSuppliers(): Promise<Supplier[]> {
   if (IS_DEMO) return demoSuppliers.map(s => ({ ...s, created_at: '' }))
   const { data, error } = await supabase.from('suppliers').select('*').order('name')
-  if (error) { logQueryError('suppliers', error); throw error }
+  if (error) { logSupabaseError('getSuppliers', error); throw error }
   return data as Supplier[]
 }
 
 export async function upsertSupplier(supplier: Partial<Supplier>): Promise<Supplier> {
   if (IS_DEMO) return { ...supplier, id: supplier.id || crypto.randomUUID(), name: supplier.name || '', created_at: '' } as Supplier
   const { data, error } = await supabase.from('suppliers').upsert(supplier).select().single()
-  if (error) throw error
+  if (error) { logSupabaseError('upsertSupplier', error); throw error }
   return data as Supplier
 }
 
 export async function deleteSupplier(id: string): Promise<void> {
   if (IS_DEMO) return
   const { error } = await supabase.from('suppliers').delete().eq('id', id)
-  if (error) throw error
+  if (error) { logSupabaseError('deleteSupplier', error); throw error }
 }
 
 // ─── Single-entity lookups ───────────────────────────────────────────────────
@@ -442,7 +455,7 @@ export async function getQuote(id: string): Promise<Quote> {
     return { ...q, created_at: '', updated_at: '', customers: customer ? { ...customer, created_at: '', updated_at: '' } : undefined }
   }
   const { data, error } = await supabase.from('quotes').select('*').eq('id', id).single()
-  if (error) throw error
+  if (error) { logSupabaseError('getQuote', error); throw error }
   const quote = data as Quote
   const [customerResult, leadResult] = await Promise.all([
     quote.customer_id
@@ -475,7 +488,7 @@ export async function getOrder(id: string): Promise<Order> {
     }
   }
   const { data, error } = await supabase.from('orders').select('*').eq('id', id).single()
-  if (error) throw error
+  if (error) { logSupabaseError('getOrder', error); throw error }
   const order = data as Order
   const [customerResult, supplierResult, paymentsResult, expensesResult] = await Promise.all([
     order.customer_id
@@ -509,7 +522,7 @@ export async function getCustomerFull(id: string): Promise<Customer> {
     supabase.from('orders').select('*').eq('customer_id', id),
     supabase.from('leads').select('*').eq('customer_id', id).not('order_id', 'is', null),
   ])
-  if (customerResult.error) throw customerResult.error
+  if (customerResult.error) { logSupabaseError('getCustomerFull', customerResult.error); throw customerResult.error }
   return {
     ...(customerResult.data as Customer),
     orders: (ordersResult.data ?? []) as Order[],
@@ -525,14 +538,14 @@ export async function getTasks(): Promise<Task[]> {
     .from('tasks')
     .select('*')
     .order('due_date', { ascending: true })
-  if (error) { logQueryError('tasks', error); throw error }
+  if (error) { logSupabaseError('getTasks', error); throw error }
   return data as Task[]
 }
 
 export async function upsertTask(task: Partial<Task>): Promise<Task> {
   if (IS_DEMO) return { ...task, id: task.id || crypto.randomUUID(), status: task.status || 'פתוח', priority: task.priority || 'בינוני', title: task.title || '', created_at: '' } as Task
   const { data, error } = await supabase.from('tasks').upsert(task).select().single()
-  if (error) throw error
+  if (error) { logSupabaseError('upsertTask', error); throw error }
   return data as Task
 }
 
@@ -557,7 +570,7 @@ export async function refreshCustomerStats(customerId: string): Promise<Customer
     .select('sale_price, net_profit, created_at, order_status')
     .eq('customer_id', customerId)
     .neq('order_status', 'בוטל')
-  if (oErr) throw oErr
+  if (oErr) { logSupabaseError('refreshCustomerStats', oErr); throw oErr }
 
   const validOrders: { sale_price: number; net_profit: number | null; created_at?: string }[] = orders || []
   const ordersCount = validOrders.length
@@ -580,7 +593,7 @@ export async function refreshCustomerStats(customerId: string): Promise<Customer
     customer_status: status,
   }
   const { data, error } = await supabase.from('customers').upsert(updates).select().single()
-  if (error) throw error
+  if (error) { logSupabaseError('refreshCustomerStats/upsert', error); throw error }
   return data as Customer
 }
 
@@ -588,47 +601,27 @@ export async function refreshCustomerStats(customerId: string): Promise<Customer
 
 export async function getDashboardMetrics(): Promise<DashboardMetrics> {
   const [payments, expenses, leads, quotes, orders] = await Promise.all([
-    getPayments(),
-    getExpenses(),
-    getLeads(),
-    getQuotes(),
-    getOrders(),
+    getPayments(), getExpenses(), getLeads(), getQuotes(), getOrders(),
   ])
-
   const now = new Date()
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
   const twoWeeksAhead = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000)
-
-  const monthlyRevenue = payments
-    .filter(p => p.is_paid && new Date(p.payment_date) >= monthStart)
-    .reduce((s, p) => s + p.amount, 0)
-
-  const monthlyExpenses = expenses
-    .filter(e => e.is_paid && new Date(e.expense_date) >= monthStart)
-    .reduce((s, e) => s + e.amount, 0)
-
-  const unpaidBalance = orders
-    .filter(o => o.payment_status !== 'שולם במלואו')
-    .reduce((s, o) => s + o.balance_due, 0)
-
+  const monthlyRevenue = payments.filter(p => p.is_paid && new Date(p.payment_date) >= monthStart).reduce((s, p) => s + p.amount, 0)
+  const monthlyExpenses = expenses.filter(e => e.is_paid && new Date(e.expense_date) >= monthStart).reduce((s, e) => s + e.amount, 0)
+  const unpaidBalance = orders.filter(o => o.payment_status !== 'שולם במלואו').reduce((s, o) => s + o.balance_due, 0)
   const upcomingDeliveries = orders.filter(o => {
     if (!o.delivery_date || ['הושלם', 'בוטל'].includes(o.order_status)) return false
     const d = new Date(o.delivery_date)
     return d >= now && d <= twoWeeksAhead
   }).length
-
   return {
-    monthlyRevenue,
-    monthlyExpenses,
-    monthlyProfit: monthlyRevenue - monthlyExpenses,
+    monthlyRevenue, monthlyExpenses, monthlyProfit: monthlyRevenue - monthlyExpenses,
     openOrders: orders.filter(o => !['הושלם', 'בוטל'].includes(o.order_status)).length,
     openQuotes: quotes.filter(q => !['אושרה', 'נדחתה', 'פג תוקף'].includes(q.quote_status)).length,
     activeLeads: leads.filter(l => !['נסגר להזמנה', 'לא רלוונטי'].includes(l.lead_status)).length,
     waitingForDetails: leads.filter(l => l.lead_status === 'מחכה לפרטים').length,
-    unpaidBalance,
-    upcomingDeliveries,
-    realCustomers: 0,
-    repeatCustomers: 0,
+    unpaidBalance, upcomingDeliveries,
+    realCustomers: 0, repeatCustomers: 0,
     waitingForDeposit: orders.filter(o => o.order_status === 'מחכה למקדמה').length,
     inProduction: orders.filter(o => o.order_status === 'בייצור' || o.order_status === 'הועבר לייצור').length,
   }

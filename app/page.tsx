@@ -1,5 +1,9 @@
 'use client'
 
+if (typeof window !== 'undefined') {
+  console.log('[DEBUG VERSION] Dashboard queries refactor v2 loaded')
+}
+
 import { useEffect, useState, useMemo } from 'react'
 import { Shell } from '@/components/layout/shell'
 import { MetricCard } from '@/components/dashboard/metric-card'
