@@ -12,8 +12,7 @@ import type {
 } from './types'
 
 if (typeof window !== 'undefined') {
-  // If you see this line, the new build is running.
-  console.log('[DEBUG VERSION] data layer v3 loaded — logSupabaseError, no embedded joins')
+  console.log('[DEBUG FIX ACTIVE] dashboard quotes/orders refactor loaded')
 }
 
 const IS_DEMO =

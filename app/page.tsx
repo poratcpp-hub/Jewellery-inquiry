@@ -1,7 +1,7 @@
 'use client'
 
 if (typeof window !== 'undefined') {
-  console.log('[DEBUG VERSION] Dashboard queries refactor v2 loaded')
+  console.log('[DEBUG FIX ACTIVE] dashboard quotes/orders refactor loaded')
 }
 
 import { useEffect, useState, useMemo } from 'react'
@@ -14,7 +14,8 @@ import { useToast } from '@/components/ui/toast'
 import Link from 'next/link'
 import { TrendingUp, TrendingDown, DollarSign, ShoppingBag, FileText, Target, AlertCircle, Calendar, ArrowLeft, AlertTriangle, Clock, WifiOff } from 'lucide-react'
 import { formatCurrency, formatDate } from '@/lib/utils'
-import { getPayments, getExpenses, getLeads, getQuotes, getOrders, getCustomers, checkDatabaseConnection } from '@/lib/data'
+import { getPayments, getExpenses, getLeads, getQuotes, getOrders, getCustomers, checkDatabaseConnection, logSupabaseError } from '@/lib/data'
+import { supabase } from '@/lib/supabase'
 import type { DashboardMetrics, Order, Lead, Quote } from '@/lib/types'
 import { CLOSED_ORDER_STATUSES, CLOSED_QUOTE_STATUSES, CLOSED_LEAD_STATUSES } from '@/lib/constants'
 
@@ -185,10 +186,10 @@ export default function DashboardPage() {
 
   useEffect(() => {
     const load = async () => {
-      // Step 1: quick connection health check — surfaces the exact error
+      // Step 1: DB health check — surfaces the exact error for customers
       const health = await checkDatabaseConnection()
       if (!health.ok) {
-        console.error('[Dashboard] DB health check failed:', health.error)
+        logSupabaseError('Dashboard DB health check failed', { message: health.error })
         setDbError(health.error ?? 'שגיאה לא ידועה')
         setMetrics(EMPTY_METRICS)
         toast({ type: 'error', title: 'שגיאה בטעינת הדשבורד. בדוק חיבור למסד הנתונים.' })
@@ -196,7 +197,24 @@ export default function DashboardPage() {
         return
       }
 
-      // Step 2: load all data in parallel, tolerating partial failures
+      // Step 2: explicit quotes/orders simple health checks
+      const { data: quotesHealth, error: quotesHealthError } = await supabase
+        .from('quotes').select('id').limit(1)
+      if (quotesHealthError) {
+        logSupabaseError('quotes simple health check failed', quotesHealthError)
+      } else {
+        console.log('[Supabase] ✅ quotes simple query OK', quotesHealth)
+      }
+
+      const { data: ordersHealth, error: ordersHealthError } = await supabase
+        .from('orders').select('id').limit(1)
+      if (ordersHealthError) {
+        logSupabaseError('orders simple health check failed', ordersHealthError)
+      } else {
+        console.log('[Supabase] ✅ orders simple query OK', ordersHealth)
+      }
+
+      // Step 3: load all data in parallel, tolerating partial failures
       const [paymentsR, expensesR, leadsR, quotesR, ordersR, customersR] = await Promise.allSettled([
         getPayments(), getExpenses(), getLeads(), getQuotes(), getOrders(), getCustomers(),
       ])
@@ -208,7 +226,7 @@ export default function DashboardPage() {
       const orders    = ordersR.status    === 'fulfilled' ? ordersR.value    : []
       const customers = customersR.status === 'fulfilled' ? customersR.value : []
 
-      // Log any individual query failures with table context
+      // Log any individual full-query failures via logSupabaseError
       const results = [
         { name: 'payments',  r: paymentsR  },
         { name: 'expenses',  r: expensesR  },
@@ -219,15 +237,7 @@ export default function DashboardPage() {
       ]
       results.forEach(({ name, r }) => {
         if (r.status === 'rejected') {
-          const err = r.reason as { message?: string; code?: string; details?: string; hint?: string; status?: number } | undefined
-          console.error(
-            `[Dashboard] query "${name}" failed` +
-            ` | message: ${err?.message ?? String(r.reason)}` +
-            ` | code: ${err?.code ?? '—'}` +
-            ` | status: ${err?.status ?? '—'}` +
-            ` | details: ${err?.details ?? '—'}` +
-            ` | hint: ${err?.hint ?? '—'}`
-          )
+          logSupabaseError(`Dashboard query "${name}" failed`, r.reason)
         }
       })
 
