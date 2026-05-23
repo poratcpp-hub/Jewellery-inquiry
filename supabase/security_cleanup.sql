@@ -3,6 +3,8 @@
 -- Fixes:
 --   1. function_search_path_mutable  (update_updated_at_column, refresh_customer_stats)
 --   2. rls_policy_always_true        (replaces broad FOR ALL with per-operation policies)
+--   3. anon_security_definer_function_executable (rls_auto_enable)
+--   4. refresh_customer_stats status logic updated (לקוח פוטנציאלי when 0 orders)
 -- Run in: Supabase Dashboard → SQL Editor
 -- ============================================================
 
@@ -268,3 +270,68 @@ alter default privileges in schema public
   grant select, insert, update, delete on tables    to authenticated;
 alter default privileges in schema public
   grant usage, select                  on sequences to authenticated;
+
+
+-- ============================================================
+-- PART 5 — Fix SECURITY DEFINER function callable by anon
+-- rls_auto_enable() should not be callable by public roles
+-- ============================================================
+
+revoke execute on function public.rls_auto_enable() from anon;
+revoke execute on function public.rls_auto_enable() from authenticated;
+revoke execute on function public.rls_auto_enable() from public;
+
+
+-- ============================================================
+-- PART 6 — Fix refresh_customer_stats: use לקוח פוטנציאלי
+--           when customer has 0 orders (not לא פעיל)
+-- ============================================================
+
+create or replace function public.refresh_customer_stats(p_customer_id uuid)
+returns void
+language plpgsql
+set search_path = public
+as $$
+declare
+  v_orders_count integer;
+  v_total_revenue numeric;
+  v_total_profit  numeric;
+  v_avg_order     numeric;
+  v_first_order   date;
+  v_last_order    date;
+  v_new_status    text;
+begin
+  select
+    count(*),
+    coalesce(sum(sale_price), 0),
+    coalesce(sum(net_profit), 0),
+    case when count(*) > 0 then coalesce(sum(sale_price), 0) / count(*) else 0 end,
+    min(created_at::date),
+    max(created_at::date)
+  into v_orders_count, v_total_revenue, v_total_profit, v_avg_order, v_first_order, v_last_order
+  from orders
+  where customer_id = p_customer_id
+    and order_status not in ('בוטל');
+
+  if v_orders_count = 0 then
+    v_new_status := 'לקוח פוטנציאלי';
+  elsif v_total_revenue >= 10000 or v_orders_count >= 3 then
+    v_new_status := 'VIP';
+  elsif v_orders_count > 1 then
+    v_new_status := 'לקוח חוזר';
+  else
+    v_new_status := 'לקוח חדש';
+  end if;
+
+  update customers set
+    orders_count         = v_orders_count,
+    total_revenue        = v_total_revenue,
+    total_profit         = v_total_profit,
+    average_order_value  = v_avg_order,
+    first_order_date     = v_first_order,
+    last_order_date      = v_last_order,
+    customer_status      = v_new_status,
+    updated_at           = now()
+  where id = p_customer_id;
+end;
+$$;
