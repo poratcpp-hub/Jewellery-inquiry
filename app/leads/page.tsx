@@ -13,7 +13,8 @@ import { TableSkeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
 import { useDebounce, useTableSort } from '@/lib/hooks'
 import { formatCurrency, formatDate, isOverdue, exportCsv } from '@/lib/utils'
-import { getLeads, upsertLead, deleteLead, getCustomers, patchLead } from '@/lib/data'
+import { getLeads, upsertLead, deleteLead, getCustomers, patchLead, upsertCustomer, upsertOrder } from '@/lib/data'
+import { supabase } from '@/lib/supabase'
 import { LEAD_STATUSES, LEAD_PRIORITIES, CLOSED_LEAD_STATUSES } from '@/lib/constants'
 import { InlineStatusSelect } from '@/components/ui/inline-status-select'
 import type { Lead, Customer } from '@/lib/types'
@@ -91,10 +92,83 @@ export default function LeadsPage() {
     try {
       await patchLead(lead.id, { lead_status: newStatus })
       setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, lead_status: newStatus } : l))
-    } catch {
+
+      if (newStatus !== 'נסגר להזמנה') return
+
+      // ── Step 1: find or create customer ──────────────────────────────────
+      let customer: Customer
+      const existingById = lead.customer_id ? customers.find(c => c.id === lead.customer_id) : null
+      const existingByPhone = !existingById && lead.phone ? customers.find(c => c.phone === lead.phone) : null
+
+      if (existingById) {
+        customer = existingById
+        toast({ type: 'info', title: 'לקוח מחובר', description: customer.full_name })
+      } else if (existingByPhone) {
+        customer = existingByPhone
+        await patchLead(lead.id, { customer_id: customer.id })
+        setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, customer_id: customer.id } : l))
+        toast({ type: 'success', title: 'לקוח קיים נמצא', description: customer.full_name })
+      } else {
+        customer = await upsertCustomer({
+          full_name: lead.full_name || 'לקוח חדש',
+          phone: lead.phone,
+          instagram: lead.instagram,
+          email: lead.email,
+          source: lead.source,
+          customer_status: 'לקוח חדש',
+        })
+        await patchLead(lead.id, { customer_id: customer.id })
+        setCustomers(prev => [customer, ...prev])
+        setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, customer_id: customer.id } : l))
+        toast({ type: 'success', title: `לקוח נוצר: ${customer.full_name}`, description: 'נוסף לרשימת הלקוחות' })
+      }
+
+      // ── Step 2: pull quote financials if available ────────────────────────
+      let salePrice = lead.budget ?? 0
+      let totalCost = 0, netProfit = 0, profitMargin = 0
+
+      if (lead.quote_id) {
+        const { data: q } = await supabase.from('quotes').select('sale_price,total_cost,expected_profit,profit_margin').eq('id', lead.quote_id).maybeSingle()
+        if (q) {
+          salePrice = (q.sale_price as number) || salePrice
+          totalCost = (q.total_cost as number) || 0
+          netProfit = (q.expected_profit as number) || 0
+          profitMargin = (q.profit_margin as number) || 0
+        }
+      }
+
+      // ── Step 3: create order ──────────────────────────────────────────────
+      const order = await upsertOrder({
+        order_number: `ORD-${Date.now()}`,
+        customer_id: customer.id,
+        lead_id: lead.id,
+        quote_id: lead.quote_id || undefined,
+        jewelry_type: lead.jewelry_type,
+        gold_type: lead.gold_type,
+        gold_color: lead.gold_color,
+        carat: lead.carat,
+        size: lead.ring_size,
+        description: lead.desired_style || lead.original_message,
+        sale_price: salePrice,
+        deposit_amount: 0,
+        balance_due: salePrice,
+        total_cost: totalCost,
+        net_profit: netProfit,
+        profit_margin: profitMargin,
+        order_status: 'מחכה למקדמה',
+        payment_status: 'לא שולם',
+        notes: lead.notes,
+      })
+
+      await patchLead(lead.id, { order_id: order.id })
+      setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, order_id: order.id } : l))
+      toast({ type: 'success', title: `הזמנה ${order.order_number} נוצרה`, description: `ללקוח ${customer.full_name}` })
+
+    } catch (err) {
+      console.error('handleStatusChange:', err)
       toast({ type: 'error', title: 'שגיאה בעדכון סטטוס' })
     }
-  }, [toast])
+  }, [customers, toast])
 
   const handlePriorityChange = useCallback(async (lead: Lead, newPriority: string) => {
     try {

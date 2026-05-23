@@ -21,8 +21,7 @@ if (typeof window !== 'undefined') {
   } else if (key.startsWith('eyJ')) {
     console.log('[Supabase] Key type: JWT anon — no host restrictions ✅')
   }
-  // Version marker — if you see this line, the cache-bust build is running
-  console.log('[Supabase] data layer v2 — no embedded joins ✅')
+  console.log('[Supabase] data layer v5 — patch helpers, lead→order conversion ✅')
 }
 
 export const supabase = createClient()
