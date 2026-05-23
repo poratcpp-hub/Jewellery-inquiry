@@ -1,5 +1,48 @@
 import { useRef, useEffect, useCallback, useState, useMemo } from 'react'
 
+export function useUnsavedChanges(isOpen: boolean) {
+  const isDirtyRef = useRef(false)
+  const [confirmClose, setConfirmClose] = useState(false)
+
+  useEffect(() => {
+    if (isOpen) {
+      isDirtyRef.current = false
+      setConfirmClose(false)
+    }
+  }, [isOpen])
+
+  useEffect(() => {
+    if (!isOpen) return
+    const handler = (e: BeforeUnloadEvent) => {
+      if (isDirtyRef.current) {
+        e.preventDefault()
+        e.returnValue = ''
+      }
+    }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [isOpen])
+
+  const markDirty = useCallback(() => { isDirtyRef.current = true }, [])
+  const markClean = useCallback(() => { isDirtyRef.current = false }, [])
+
+  const tryClose = useCallback((onClose: () => void) => {
+    if (isDirtyRef.current) {
+      setConfirmClose(true)
+    } else {
+      onClose()
+    }
+  }, [])
+
+  const confirmAndClose = useCallback((onClose: () => void) => {
+    isDirtyRef.current = false
+    setConfirmClose(false)
+    onClose()
+  }, [])
+
+  return { isDirtyRef, confirmClose, setConfirmClose, markDirty, markClean, tryClose, confirmAndClose }
+}
+
 export function useDebounce<T extends (...args: Parameters<T>) => void>(
   fn: T,
   delay: number

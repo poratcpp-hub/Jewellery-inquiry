@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { Dialog, DialogHeader, DialogBody, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -8,6 +8,9 @@ import { Textarea } from '@/components/ui/textarea'
 import { Select } from '@/components/ui/select'
 import { FormField, FormGrid, FormSection } from '@/components/ui/form-field'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
+import { CUSTOMER_STATUSES, SOURCES } from '@/lib/constants'
+import { isValidIsraeliMobilePhone, isValidEmail, normalizeIsraeliPhone, PHONE_ERROR, EMAIL_ERROR } from '@/lib/validation'
+import { useUnsavedChanges } from '@/lib/hooks'
 import type { Customer } from '@/lib/types'
 
 interface CustomerFormProps {
@@ -17,53 +20,50 @@ interface CustomerFormProps {
   onSave: (data: Partial<Customer>) => void
 }
 
-const STATUS_OPTIONS = ['לקוח חדש', 'לקוח חוזר', 'VIP', 'לא פעיל']
-const SOURCE_OPTIONS = ['אינסטגרם', 'פייסבוק', 'המלצה', 'אתר', 'גוגל', 'אחר']
-
-const DEFAULTS: Partial<Customer> = { customer_status: 'לקוח חדש' }
+const DEFAULTS: Partial<Customer> = { customer_status: 'לקוח פוטנציאלי' }
 
 export function CustomerForm({ open, onClose, customer, onSave }: CustomerFormProps) {
   const [form, setForm] = useState<Partial<Customer>>(customer || DEFAULTS)
   const [errors, setErrors] = useState<Record<string, string>>({})
-  const isDirtyRef = useRef(false)
-  const [confirmClose, setConfirmClose] = useState(false)
+  const { isDirtyRef, confirmClose, setConfirmClose, markDirty, markClean, tryClose, confirmAndClose } = useUnsavedChanges(open)
 
   useEffect(() => {
     if (open) {
       setForm(customer || DEFAULTS)
       setErrors({})
-      isDirtyRef.current = false
-      setConfirmClose(false)
+      markClean()
     }
   }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const set = (key: keyof Customer, value: string) => {
     setForm(f => ({ ...f, [key]: value }))
-    isDirtyRef.current = true
+    markDirty()
     if (errors[key]) setErrors(e => ({ ...e, [key]: '' }))
   }
 
   const validate = () => {
     const e: Record<string, string> = {}
     if (!form.full_name?.trim()) e.full_name = 'שם מלא הוא שדה חובה'
+
+    const phone = form.phone?.trim() || ''
+    if (phone && !isValidIsraeliMobilePhone(phone)) e.phone = PHONE_ERROR
+
+    const email = form.email?.trim() || ''
+    if (email && !isValidEmail(email)) e.email = EMAIL_ERROR
+
     setErrors(e)
     return Object.keys(e).length === 0
   }
 
   const handleSave = () => {
     if (!validate()) return
-    onSave(form)
+    const normalized = form.phone ? normalizeIsraeliPhone(form.phone) : form.phone
+    isDirtyRef.current = false
+    onSave({ ...form, phone: normalized || undefined })
     onClose()
   }
 
-  const handleClose = () => {
-    if (isDirtyRef.current) {
-      setConfirmClose(true)
-    } else {
-      onClose()
-    }
-  }
-
+  const handleClose = () => tryClose(onClose)
   const isEdit = !!customer
 
   return (
@@ -82,13 +82,14 @@ export function CustomerForm({ open, onClose, customer, onSave }: CustomerFormPr
               />
             </FormField>
             <FormGrid>
-              <FormField label="טלפון" htmlFor="phone">
+              <FormField label="טלפון" error={errors.phone} htmlFor="phone">
                 <Input
                   id="phone"
                   value={form.phone || ''}
                   onChange={e => set('phone', e.target.value)}
-                  placeholder="050-0000000"
+                  placeholder="0500000000"
                   type="tel"
+                  error={!!errors.phone}
                 />
               </FormField>
               <FormField label="אינסטגרם" htmlFor="instagram">
@@ -99,13 +100,14 @@ export function CustomerForm({ open, onClose, customer, onSave }: CustomerFormPr
                   placeholder="@username"
                 />
               </FormField>
-              <FormField label='דוא"ל' htmlFor="email">
+              <FormField label='דוא"ל' error={errors.email} htmlFor="email">
                 <Input
                   id="email"
                   value={form.email || ''}
                   onChange={e => set('email', e.target.value)}
                   placeholder="example@mail.com"
                   type="email"
+                  error={!!errors.email}
                 />
               </FormField>
               <FormField label="עיר" htmlFor="city">
@@ -124,16 +126,16 @@ export function CustomerForm({ open, onClose, customer, onSave }: CustomerFormPr
               <FormField label="מקור" htmlFor="source">
                 <Select id="source" value={form.source || ''} onChange={e => set('source', e.target.value)}>
                   <option value="">בחר מקור</option>
-                  {SOURCE_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+                  {SOURCES.map(s => <option key={s} value={s}>{s}</option>)}
                 </Select>
               </FormField>
               <FormField label="סטטוס לקוח" htmlFor="customer_status">
                 <Select
                   id="customer_status"
-                  value={form.customer_status || 'לקוח חדש'}
+                  value={form.customer_status || 'לקוח פוטנציאלי'}
                   onChange={e => set('customer_status', e.target.value)}
                 >
-                  {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+                  {CUSTOMER_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
                 </Select>
               </FormField>
             </FormGrid>
@@ -157,10 +159,12 @@ export function CustomerForm({ open, onClose, customer, onSave }: CustomerFormPr
       <ConfirmDialog
         open={confirmClose}
         onClose={() => setConfirmClose(false)}
-        onConfirm={() => { setConfirmClose(false); onClose() }}
+        onConfirm={() => confirmAndClose(onClose)}
         title="יציאה ללא שמירה"
-        description="יש פרטים שלא נשמרו. האם לצאת?"
-        confirmLabel="צא ללא שמירה"
+        description="יש שינויים שלא נשמרו. לצאת בלי לשמור?"
+        confirmLabel="צא בלי לשמור"
+        cancelLabel="המשך עריכה"
+        variant="default"
       />
     </>
   )

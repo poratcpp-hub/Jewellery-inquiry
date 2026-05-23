@@ -10,7 +10,8 @@ import { FormField, FormGrid, FormSection } from '@/components/ui/form-field'
 import { useToast } from '@/components/ui/toast'
 import { SOURCES, JEWELRY_TYPES, DIAMOND_TYPES, GOLD_TYPES, GOLD_COLORS } from '@/lib/constants'
 import { detectJewelryType, getAutoLeadStatus } from '@/lib/workflow'
-import { upsertLead } from '@/lib/data'
+import { upsertLead, findOrCreateCustomerFromLead } from '@/lib/data'
+import { isValidIsraeliMobilePhone, isValidEmail, normalizeIsraeliPhone, PHONE_ERROR, EMAIL_ERROR } from '@/lib/validation'
 import type { Lead } from '@/lib/types'
 
 interface InquiryFormProps {
@@ -78,8 +79,18 @@ export function InquiryForm({ open, onClose, onCreated }: InquiryFormProps) {
   const validate = (): boolean => {
     const e: Partial<Record<keyof FormData, string>> = {}
     if (!form.full_name.trim()) e.full_name = 'שם הוא שדה חובה'
+
+    const phone = form.phone.trim()
+    if (phone) {
+      if (!isValidIsraeliMobilePhone(phone)) e.phone = PHONE_ERROR
+    }
+
+    const email = form.email.trim()
+    if (email && !isValidEmail(email)) e.email = EMAIL_ERROR
+
     if (!form.phone.trim() && !form.instagram.trim() && !form.email.trim())
-      e.phone = 'נדרשת לפחות דרך יצירת קשר אחת'
+      e.phone = e.phone || 'נדרשת לפחות דרך יצירת קשר אחת'
+
     if (!form.source) e.source = 'נדרש מקור'
     if (!form.original_message.trim() && !form.jewelry_type)
       e.original_message = 'נדרשת הודעת פנייה או סוג תכשיט'
@@ -91,9 +102,10 @@ export function InquiryForm({ open, onClose, onCreated }: InquiryFormProps) {
     if (!validate()) return
     setSaving(true)
     try {
+      const normalizedPhone = form.phone ? normalizeIsraeliPhone(form.phone) : undefined
       const leadData: Partial<Lead> = {
         full_name: form.full_name,
-        phone: form.phone || undefined,
+        phone: normalizedPhone || undefined,
         instagram: form.instagram || undefined,
         email: form.email || undefined,
         source: form.source || undefined,
@@ -113,10 +125,20 @@ export function InquiryForm({ open, onClose, onCreated }: InquiryFormProps) {
 
       const lead = await upsertLead(leadData)
 
+      // Auto-link or create customer
+      let customerDesc = ''
+      try {
+        const { customer, created } = await findOrCreateCustomerFromLead(lead)
+        if (lead.id) {
+          await upsertLead({ id: lead.id, customer_id: customer.id })
+        }
+        customerDesc = created ? 'נוצר לקוח חדש וקושר לליד' : 'הליד קושר ללקוח קיים'
+      } catch { /* non-fatal */ }
+
       toast({
         type: 'success',
         title: `ליד חדש נפתח`,
-        description: `${form.full_name} · סטטוס: ${lead.lead_status}`,
+        description: customerDesc || `${form.full_name} · סטטוס: ${lead.lead_status}`,
       })
 
       onCreated?.(lead)
@@ -150,7 +172,8 @@ export function InquiryForm({ open, onClose, onCreated }: InquiryFormProps) {
                 id="lf_phone"
                 value={form.phone}
                 onChange={e => set('phone', e.target.value)}
-                placeholder="050-0000000"
+                placeholder="0500000000"
+                error={!!errors.phone}
               />
             </FormField>
             <FormField label="אינסטגרם" htmlFor="lf_ig">
@@ -161,12 +184,13 @@ export function InquiryForm({ open, onClose, onCreated }: InquiryFormProps) {
                 placeholder="@username"
               />
             </FormField>
-            <FormField label='דוא"ל' htmlFor="lf_email">
+            <FormField label='דוא"ל' error={errors.email} htmlFor="lf_email">
               <Input
                 id="lf_email"
                 value={form.email}
                 onChange={e => set('email', e.target.value)}
                 placeholder="email@example.com"
+                error={!!errors.email}
               />
             </FormField>
           </FormGrid>

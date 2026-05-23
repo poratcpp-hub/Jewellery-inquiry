@@ -1,5 +1,5 @@
 // Centralised Hebrew labels used across all pages
-export const CUSTOMER_STATUSES = ['לקוח חדש', 'לקוח חוזר', 'VIP', 'לא פעיל'] as const
+export const CUSTOMER_STATUSES = ['לקוח פוטנציאלי', 'לקוח חדש', 'לקוח חוזר', 'VIP', 'לא פעיל'] as const
 export const LEAD_STATUSES = [
   'חדש', 'צריך מענה ראשוני', 'מחכה לפרטים', 'מוכן להצעת מחיר',
   'נשלחה הצעת מחיר', 'פולואפ ראשון', 'פולואפ שני',

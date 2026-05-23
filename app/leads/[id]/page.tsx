@@ -8,10 +8,13 @@ import { Button } from '@/components/ui/button'
 import { Badge, getStatusBadgeVariant } from '@/components/ui/badge'
 import { useToast } from '@/components/ui/toast'
 import { formatCurrency, formatDate, generateQuoteNumber } from '@/lib/utils'
-import { getLead, upsertQuote, upsertLead } from '@/lib/data'
+import { getLead, upsertQuote, upsertLead, createOrderFromLeadOrQuote } from '@/lib/data'
 import { getMissingDetails, generateMissingDetailsMessage, getNextAction } from '@/lib/workflow'
 import type { Lead } from '@/lib/types'
-import { ArrowRight, Copy, FileText, Phone, AtSign, AlertTriangle, CheckCircle, Clock, MessageSquare, XCircle, ExternalLink } from 'lucide-react'
+import {
+  ArrowRight, Copy, FileText, Phone, AtSign, AlertTriangle, CheckCircle,
+  Clock, MessageSquare, XCircle, ExternalLink, ShoppingBag, User,
+} from 'lucide-react'
 
 export default function LeadDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -19,6 +22,7 @@ export default function LeadDetailPage() {
   const [lead, setLead] = useState<Lead | null>(null)
   const [loading, setLoading] = useState(true)
   const [creatingQuote, setCreatingQuote] = useState(false)
+  const [creatingOrder, setCreatingOrder] = useState(false)
 
   useEffect(() => {
     getLead(id)
@@ -59,7 +63,7 @@ export default function LeadDetailPage() {
         total_cost: 0, sale_price: 0, expected_profit: 0, profit_margin: 0,
       })
       const updated = await upsertLead({ ...lead, lead_status: 'מוכן להצעת מחיר', quote_id: quote.id })
-      setLead(updated)
+      setLead(prev => prev ? { ...prev, ...updated, quotes: quote } : null)
       toast({
         type: 'success',
         title: `הצעת מחיר ${quote.quote_number} נפתחה`,
@@ -70,6 +74,27 @@ export default function LeadDetailPage() {
       toast({ type: 'error', title: 'שגיאה ביצירת הצעת מחיר' })
     } finally {
       setCreatingQuote(false)
+    }
+  }, [lead, toast])
+
+  const handleCreateOrder = useCallback(async () => {
+    if (!lead) return
+    setCreatingOrder(true)
+    try {
+      const { order, alreadyExisted } = await createOrderFromLeadOrQuote({
+        leadId: lead.id,
+        quoteId: lead.quote_id || undefined,
+      })
+      setLead(prev => prev ? { ...prev, order_id: order.id, lead_status: 'נסגר להזמנה' } : null)
+      toast({
+        type: alreadyExisted ? 'info' : 'success',
+        title: alreadyExisted ? 'כבר קיימת הזמנה לליד הזה' : 'נפתחה הזמנה חדשה מהליד',
+      })
+    } catch (err) {
+      console.error(err)
+      toast({ type: 'error', title: 'שגיאה ביצירת הזמנה' })
+    } finally {
+      setCreatingOrder(false)
     }
   }, [lead, toast])
 
@@ -100,18 +125,26 @@ export default function LeadDetailPage() {
 
   const isClosed = lead.lead_status === 'נסגר להזמנה' || lead.lead_status === 'לא רלוונטי'
 
-  const actionColors = {
+  type ActionType = NonNullable<typeof nextAction>['action']
+
+  const actionColors: Record<ActionType, string> = {
+    link_customer: 'bg-purple-50 border-purple-200',
     reply: 'bg-red-50 border-red-200',
     fill_details: 'bg-amber-50 border-amber-200',
     create_quote: 'bg-emerald-50 border-emerald-200',
     follow_up: 'bg-blue-50 border-blue-200',
+    create_order: 'bg-orange-50 border-orange-200',
+    view_order: 'bg-emerald-50 border-emerald-200',
     done: 'bg-gray-50 border-gray-200',
   }
-  const actionIcons = {
+  const actionIcons: Record<ActionType, React.ElementType> = {
+    link_customer: User,
     reply: MessageSquare,
     fill_details: AlertTriangle,
     create_quote: FileText,
     follow_up: Clock,
+    create_order: ShoppingBag,
+    view_order: ExternalLink,
     done: CheckCircle,
   }
   const ActionIcon = nextAction ? actionIcons[nextAction.action] : CheckCircle
@@ -134,7 +167,7 @@ export default function LeadDetailPage() {
           </div>
         </div>
 
-        {/* Linked quote / order banners */}
+        {/* Linked order / quote banners */}
         {lead.order_id && (
           <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex items-center justify-between">
             <span className="text-sm font-medium text-emerald-800">ליד זה הומר להזמנה</span>
@@ -163,7 +196,9 @@ export default function LeadDetailPage() {
               <ActionIcon size={20} className="mt-0.5 shrink-0" />
               <div className="flex-1">
                 <p className="font-semibold text-[#2c1810]">{nextAction.title}</p>
-                <p className="text-sm text-[#4a3728] mt-0.5">{nextAction.description}</p>
+                {nextAction.description && (
+                  <p className="text-sm text-[#4a3728] mt-0.5">{nextAction.description}</p>
+                )}
               </div>
               <div className="flex gap-2">
                 {nextAction.action === 'fill_details' && (
@@ -180,6 +215,18 @@ export default function LeadDetailPage() {
                   <Button size="sm" variant="outline" onClick={handleCopyMessage}>
                     <Copy size={14} />העתק הודעה
                   </Button>
+                )}
+                {nextAction.action === 'create_order' && !lead.order_id && (
+                  <Button size="sm" onClick={handleCreateOrder} disabled={creatingOrder}>
+                    <ShoppingBag size={14} />{creatingOrder ? 'יוצר...' : 'פתח הזמנה'}
+                  </Button>
+                )}
+                {nextAction.action === 'view_order' && lead.order_id && (
+                  <Link href={`/orders/${lead.order_id}`}>
+                    <Button size="sm" variant="outline">
+                      <ExternalLink size={14} />עבור להזמנה
+                    </Button>
+                  </Link>
                 )}
               </div>
             </div>
@@ -297,17 +344,31 @@ export default function LeadDetailPage() {
               {missingDetails.length > 0 && (
                 <Button variant="outline" onClick={handleCopyMessage}><Copy size={15} />העתק הודעת השלמה</Button>
               )}
-              {!lead.quote_id && (
-                <Button onClick={handleCreateQuote} disabled={creatingQuote || missingDetails.length > 0}>
+              {!lead.quote_id && missingDetails.length === 0 && (
+                <Button onClick={handleCreateQuote} disabled={creatingQuote}>
                   <FileText size={15} />{creatingQuote ? 'יוצר...' : 'צור הצעת מחיר'}
                 </Button>
               )}
-              {lead.quote_id && (
+              {lead.quote_id && !lead.order_id && (
                 <Link href={`/quotes/${lead.quote_id}`}>
-                  <Button><FileText size={15} />פתח הצעת מחיר</Button>
+                  <Button variant="outline"><FileText size={15} />פתח הצעת מחיר</Button>
                 </Link>
               )}
+              {!lead.order_id && (
+                <Button onClick={handleCreateOrder} disabled={creatingOrder} className="bg-[#b8934a] hover:bg-[#a07a3a] text-white">
+                  <ShoppingBag size={15} />{creatingOrder ? 'יוצר...' : 'פתח הזמנה'}
+                </Button>
+              )}
             </div>
+          </div>
+        )}
+
+        {/* If closed with order — show link */}
+        {isClosed && lead.order_id && (
+          <div className="pb-4 flex justify-end">
+            <Link href={`/orders/${lead.order_id}`}>
+              <Button><ShoppingBag size={15} />עבור להזמנה</Button>
+            </Link>
           </div>
         )}
       </div>

@@ -13,7 +13,8 @@ import { TableSkeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
 import { useDebounce, useTableSort } from '@/lib/hooks'
 import { formatCurrency, formatDate, isOverdue, exportCsv } from '@/lib/utils'
-import { getLeads, upsertLead, deleteLead, getCustomers } from '@/lib/data'
+import { getLeads, upsertLead, deleteLead, getCustomers, findOrCreateCustomerFromLead, createOrderFromLeadOrQuote } from '@/lib/data'
+import { normalizeIsraeliPhone } from '@/lib/validation'
 import { LEAD_STATUSES, LEAD_PRIORITIES, CLOSED_LEAD_STATUSES } from '@/lib/constants'
 import { InlineStatusSelect } from '@/components/ui/inline-status-select'
 import type { Lead, Customer } from '@/lib/types'
@@ -30,6 +31,7 @@ export default function LeadsPage() {
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<Lead | undefined>()
   const [deleteTarget, setDeleteTarget] = useState<Lead | undefined>()
+  const [deleteBlocked, setDeleteBlocked] = useState(false)
 
   useEffect(() => {
     Promise.all([getLeads(), getCustomers()])
@@ -57,29 +59,60 @@ export default function LeadsPage() {
 
   const handleSave = useCallback(async (data: Partial<Lead>) => {
     try {
-      if (!editing && data.phone) {
-        const dupLead = leads.find(l => l.phone === data.phone)
-        if (dupLead) {
-          toast({ type: 'error', title: 'כפילות', description: `כבר קיים ליד עם מספר זה: "${dupLead.full_name}"` })
-          return
-        }
-      }
-
-      // Auto-link existing customer by phone (read-only, never creates)
       let finalData = { ...data }
-      if (!editing && !data.customer_id && data.phone) {
-        const existingCustomer = customers.find(c => c.phone === data.phone)
-        if (existingCustomer) finalData = { ...finalData, customer_id: existingCustomer.id }
+      const isNew = !editing
+
+      if (isNew) {
+        // Check for duplicate lead phone
+        const rawPhone = data.phone?.trim() || ''
+        if (rawPhone) {
+          const norm = normalizeIsraeliPhone(rawPhone)
+          const dupLead = leads.find(l => l.phone && normalizeIsraeliPhone(l.phone) === norm)
+          if (dupLead) {
+            toast({ type: 'error', title: 'כפילות', description: `כבר קיים ליד עם מספר זה: "${dupLead.full_name}"` })
+            return
+          }
+        }
+
+        // Auto-link or create customer
+        if (!data.customer_id) {
+          try {
+            const { customer, created } = await findOrCreateCustomerFromLead(data)
+            finalData = { ...finalData, customer_id: customer.id }
+            if (created) setCustomers(prev => [customer, ...prev])
+            toast({
+              type: 'success',
+              title: created ? 'נוצר לקוח חדש וקושר לליד' : 'הליד קושר ללקוח קיים',
+            })
+          } catch { /* non-fatal */ }
+        }
       }
 
       const saved = await upsertLead(editing ? { ...editing, ...finalData } : finalData)
       const withCustomer = { ...saved, customers: customers.find(c => c.id === saved.customer_id) }
+
       if (editing) {
         setLeads(prev => prev.map(l => l.id === editing.id ? withCustomer : l))
         toast({ type: 'success', title: 'הליד עודכן' })
       } else {
-        setLeads(prev => [{ ...withCustomer, id: withCustomer.id || Math.random().toString(36).slice(2) }, ...prev])
-        toast({ type: 'success', title: 'ליד חדש נוסף' })
+        setLeads(prev => [withCustomer, ...prev])
+      }
+
+      // Auto-create order if status is "נסגר להזמנה" and no order yet
+      if (saved.lead_status === 'נסגר להזמנה' && !saved.order_id) {
+        try {
+          const { order, alreadyExisted } = await createOrderFromLeadOrQuote({
+            leadId: saved.id,
+            quoteId: saved.quote_id || undefined,
+          })
+          setLeads(prev => prev.map(l => l.id === saved.id ? { ...l, order_id: order.id } : l))
+          toast({
+            type: alreadyExisted ? 'info' : 'success',
+            title: alreadyExisted ? 'כבר קיימת הזמנה לליד הזה' : 'נפתחה הזמנה חדשה מהליד',
+          })
+        } catch {
+          toast({ type: 'error', title: 'שגיאה ביצירת הזמנה אוטומטית' })
+        }
       }
     } catch {
       toast({ type: 'error', title: 'שגיאה בשמירת הליד' })
@@ -91,6 +124,23 @@ export default function LeadsPage() {
     try {
       await upsertLead({ id: lead.id, lead_status: newStatus })
       setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, lead_status: newStatus } : l))
+
+      // Auto-create order when closing as order
+      if (newStatus === 'נסגר להזמנה' && !lead.order_id) {
+        try {
+          const { order, alreadyExisted } = await createOrderFromLeadOrQuote({
+            leadId: lead.id,
+            quoteId: lead.quote_id || undefined,
+          })
+          setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, order_id: order.id } : l))
+          toast({
+            type: alreadyExisted ? 'info' : 'success',
+            title: alreadyExisted ? 'כבר קיימת הזמנה לליד הזה' : 'נפתחה הזמנה חדשה מהליד',
+          })
+        } catch {
+          toast({ type: 'error', title: 'שגיאה ביצירת הזמנה אוטומטית' })
+        }
+      }
     } catch {
       toast({ type: 'error', title: 'שגיאה בעדכון סטטוס' })
     }
@@ -105,6 +155,16 @@ export default function LeadsPage() {
     }
   }, [toast])
 
+  const handleDeleteRequest = useCallback((lead: Lead) => {
+    if (lead.order_id) {
+      setDeleteTarget(lead)
+      setDeleteBlocked(true)
+    } else {
+      setDeleteTarget(lead)
+      setDeleteBlocked(false)
+    }
+  }, [])
+
   const handleDelete = useCallback(async () => {
     if (!deleteTarget) return
     try {
@@ -115,6 +175,7 @@ export default function LeadsPage() {
       toast({ type: 'error', title: 'שגיאה במחיקת הליד' })
     }
     setDeleteTarget(undefined)
+    setDeleteBlocked(false)
   }, [deleteTarget, toast])
 
   const handleExport = useCallback(() => {
@@ -213,7 +274,7 @@ export default function LeadsPage() {
                         <div className="flex items-center gap-1">
                           <Link href={`/leads/${lead.id}`}><Button variant="ghost" size="icon" title="פרטים"><Eye size={15} /></Button></Link>
                           <Button variant="ghost" size="icon" onClick={() => openEdit(lead)} title="עריכה"><Pencil size={15} /></Button>
-                          <Button variant="ghost" size="icon" onClick={() => setDeleteTarget(lead)} title="מחיקה" className="text-red-500 hover:text-red-700 hover:bg-red-50"><Trash2 size={15} /></Button>
+                          <Button variant="ghost" size="icon" onClick={() => handleDeleteRequest(lead)} title="מחיקה" className="text-red-500 hover:text-red-700 hover:bg-red-50"><Trash2 size={15} /></Button>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -225,8 +286,22 @@ export default function LeadsPage() {
         </div>
 
         <LeadForm open={formOpen} onClose={closeForm} lead={editing} customers={customers} onSave={handleSave} />
+
+        {/* Delete blocked — lead has linked order */}
         <ConfirmDialog
-          open={!!deleteTarget}
+          open={!!deleteTarget && deleteBlocked}
+          onClose={() => { setDeleteTarget(undefined); setDeleteBlocked(false) }}
+          onConfirm={() => { setDeleteTarget(undefined); setDeleteBlocked(false) }}
+          title="לא ניתן למחוק ליד"
+          description={`לליד "${deleteTarget?.full_name}" קיימת הזמנה מקושרת. לא ניתן למחוק בלי לנתק/לבטל את ההזמנה.`}
+          confirmLabel="הבנתי"
+          cancelLabel=""
+          variant="default"
+        />
+
+        {/* Normal delete confirmation */}
+        <ConfirmDialog
+          open={!!deleteTarget && !deleteBlocked}
           onClose={() => setDeleteTarget(undefined)}
           onConfirm={handleDelete}
           title="מחיקת ליד"

@@ -10,6 +10,8 @@ import {
 import type {
   Customer, Lead, Quote, Order, Payment, Expense, Supplier, DashboardMetrics, Task,
 } from './types'
+import { normalizeIsraeliPhone } from './validation'
+import { calculateOrderFinancials, generateOrderNumber } from './utils'
 
 if (typeof window !== 'undefined') {
   console.log('[DEBUG FIX ACTIVE] dashboard quotes/orders refactor loaded')
@@ -220,6 +222,163 @@ export async function getLead(id: string): Promise<Lead> {
     customers: customerResult.data as Customer ?? undefined,
     quotes: quoteResult.data as Quote ?? undefined,
   }
+}
+
+// ─── Lead → Customer automation ──────────────────────────────────────────────
+
+export async function findOrCreateCustomerFromLead(
+  lead: Partial<Lead>,
+): Promise<{ customer: Customer; created: boolean }> {
+  const rawPhone = lead.phone || ''
+  const normalizedPhone = rawPhone ? normalizeIsraeliPhone(rawPhone) : ''
+  const email = lead.email?.trim() || ''
+
+  if (IS_DEMO) {
+    const found = demoCustomers.find(c =>
+      (normalizedPhone && c.phone && normalizeIsraeliPhone(c.phone) === normalizedPhone) ||
+      (email && c.email === email),
+    )
+    if (found) return { customer: { ...found, created_at: '', updated_at: '' }, created: false }
+    const newC: Customer = {
+      id: crypto.randomUUID(),
+      full_name: lead.full_name || 'לקוח חדש',
+      phone: normalizedPhone || undefined,
+      instagram: lead.instagram,
+      email: lead.email,
+      source: lead.source,
+      notes: lead.notes,
+      customer_status: 'לקוח פוטנציאלי',
+      created_at: '',
+      updated_at: '',
+    }
+    return { customer: newC, created: true }
+  }
+
+  // Search by normalized phone first
+  if (normalizedPhone) {
+    const { data } = await supabase.from('customers').select('*').eq('phone', normalizedPhone).maybeSingle()
+    if (data) return { customer: data as Customer, created: false }
+  }
+
+  // Fallback search by email
+  if (email) {
+    const { data } = await supabase.from('customers').select('*').eq('email', email).maybeSingle()
+    if (data) return { customer: data as Customer, created: false }
+  }
+
+  // Create new customer
+  const customer = await upsertCustomer({
+    full_name: lead.full_name || 'לקוח חדש',
+    phone: normalizedPhone || undefined,
+    instagram: lead.instagram,
+    email: lead.email || undefined,
+    source: lead.source,
+    notes: lead.notes,
+    customer_status: 'לקוח פוטנציאלי',
+  })
+
+  return { customer, created: true }
+}
+
+// ─── Order creation from lead/quote ──────────────────────────────────────────
+
+export async function createOrderFromLeadOrQuote({
+  leadId,
+  quoteId,
+}: {
+  leadId?: string
+  quoteId?: string
+}): Promise<{ order: Order; alreadyExisted: boolean }> {
+  let lead: Lead | null = null
+  let quote: Quote | null = null
+
+  if (leadId) {
+    lead = await getLead(leadId)
+
+    // Check if order already linked on the lead
+    if (lead.order_id) {
+      try {
+        const existingOrder = await getOrder(lead.order_id)
+        return { order: existingOrder, alreadyExisted: true }
+      } catch { /* order may have been deleted */ }
+    }
+
+    // Check orders table directly for this lead_id
+    if (!IS_DEMO) {
+      const { data: existOrders } = await supabase
+        .from('orders').select('*').eq('lead_id', leadId).limit(1)
+      if (existOrders?.length) {
+        const existingOrder = existOrders[0] as Order
+        await upsertLead({ id: leadId, order_id: existingOrder.id })
+        return { order: existingOrder, alreadyExisted: true }
+      }
+    }
+  }
+
+  // Resolve quote (prefer explicit quoteId, fallback to lead.quote_id)
+  const resolvedQuoteId = quoteId || lead?.quote_id || undefined
+  if (resolvedQuoteId) {
+    try { quote = await getQuote(resolvedQuoteId) } catch { /* no quote */ }
+  }
+
+  // Determine customer
+  let customerId = lead?.customer_id || quote?.customer_id || undefined
+  if (!customerId && lead) {
+    const { customer } = await findOrCreateCustomerFromLead(lead)
+    customerId = customer.id
+  }
+  if (!customerId) throw new Error('Cannot create order without customer')
+
+  // Build financials from quote if available
+  const salePrice = quote?.sale_price || 0
+  const totalCost = quote?.total_cost || 0
+  const calcs = calculateOrderFinancials({ sale_price: salePrice, deposit_amount: 0, total_cost: totalCost })
+
+  const order = await upsertOrder({
+    order_number: generateOrderNumber(),
+    customer_id: customerId,
+    lead_id: lead?.id || undefined,
+    quote_id: quote?.id || undefined,
+    jewelry_type: quote?.jewelry_type || lead?.jewelry_type || undefined,
+    description: quote?.description || lead?.original_message || undefined,
+    diamond_type: quote?.diamond_type || lead?.diamond_type || undefined,
+    gold_type: quote?.gold_type || lead?.gold_type || undefined,
+    gold_color: quote?.gold_color || lead?.gold_color || undefined,
+    carat: quote?.carat || lead?.carat || undefined,
+    size: lead?.ring_size || undefined,
+    notes: lead?.notes || undefined,
+    order_status: 'מחכה למקדמה',
+    payment_status: 'לא שולם',
+    sale_price: salePrice,
+    deposit_amount: 0,
+    total_cost: totalCost,
+    ...calcs,
+  })
+
+  // Link order back to lead
+  if (lead) {
+    await upsertLead({
+      id: lead.id,
+      order_id: order.id,
+      customer_id: customerId,
+      lead_status: 'נסגר להזמנה',
+    })
+  }
+
+  // Update quote: link order, mark approved
+  if (quote && !IS_DEMO) {
+    await upsertQuote({
+      id: quote.id,
+      order_id: order.id,
+      customer_id: customerId,
+      quote_status: 'אושרה',
+    })
+  }
+
+  // Refresh customer stats (fire-and-forget)
+  refreshCustomerStats(customerId).catch(() => {})
+
+  return { order, alreadyExisted: false }
 }
 
 export async function findCustomerByContact(
@@ -559,9 +718,11 @@ export async function refreshCustomerStats(customerId: string): Promise<Customer
     const totalRevenue = orders.reduce((s, o) => s + o.sale_price, 0)
     const totalProfit = orders.reduce((s, o) => s + o.net_profit, 0)
     const avgOrderValue = ordersCount > 0 ? totalRevenue / ordersCount : 0
-    let status = 'לקוח חדש'
-    if (totalRevenue >= 10000 || ordersCount >= 3) status = 'VIP'
+    let status: string
+    if (ordersCount === 0) status = 'לקוח פוטנציאלי'
+    else if (totalRevenue >= 10000 || ordersCount >= 3) status = 'VIP'
     else if (ordersCount > 1) status = 'לקוח חוזר'
+    else status = 'לקוח חדש'
     return { ...c, created_at: '', updated_at: '', orders_count: ordersCount, total_revenue: totalRevenue, total_profit: totalProfit, average_order_value: avgOrderValue, customer_status: status }
   }
   const { data: orders, error: oErr } = await supabase
@@ -577,9 +738,11 @@ export async function refreshCustomerStats(customerId: string): Promise<Customer
   const totalProfit = validOrders.reduce((s, o) => s + (o.net_profit ?? 0), 0)
   const avgOrderValue = ordersCount > 0 ? totalRevenue / ordersCount : 0
   const dates = validOrders.map(o => o.created_at).sort()
-  let status = 'לקוח חדש'
-  if (totalRevenue >= 10000 || ordersCount >= 3) status = 'VIP'
+  let status: string
+  if (ordersCount === 0) status = 'לקוח פוטנציאלי'
+  else if (totalRevenue >= 10000 || ordersCount >= 3) status = 'VIP'
   else if (ordersCount > 1) status = 'לקוח חוזר'
+  else status = 'לקוח חדש'
 
   const updates: Partial<Customer> = {
     id: customerId,

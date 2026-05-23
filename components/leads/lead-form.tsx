@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { Dialog, DialogHeader, DialogBody, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -9,6 +9,8 @@ import { Select } from '@/components/ui/select'
 import { FormField, FormGrid, FormSection } from '@/components/ui/form-field'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { LEAD_STATUSES, LEAD_PRIORITIES, SOURCES, JEWELRY_TYPES, DIAMOND_TYPES, GOLD_TYPES, GOLD_COLORS } from '@/lib/constants'
+import { isValidIsraeliMobilePhone, isValidEmail, normalizeIsraeliPhone, PHONE_ERROR, EMAIL_ERROR } from '@/lib/validation'
+import { useUnsavedChanges } from '@/lib/hooks'
 import type { Lead, Customer } from '@/lib/types'
 
 interface LeadFormProps {
@@ -24,44 +26,47 @@ const DEFAULTS: Partial<Lead> = { lead_status: 'חדש', priority: 'בינוני
 export function LeadForm({ open, onClose, lead, customers = [], onSave }: LeadFormProps) {
   const [form, setForm] = useState<Partial<Lead>>(lead || DEFAULTS)
   const [errors, setErrors] = useState<Record<string, string>>({})
-  const isDirtyRef = useRef(false)
-  const [confirmClose, setConfirmClose] = useState(false)
+  const { isDirtyRef, confirmClose, setConfirmClose, markDirty, markClean, tryClose, confirmAndClose } = useUnsavedChanges(open)
 
   useEffect(() => {
     if (open) {
       setForm(lead || DEFAULTS)
       setErrors({})
-      isDirtyRef.current = false
-      setConfirmClose(false)
+      markClean()
     }
   }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const set = (key: keyof Lead, value: string | number) => {
     setForm(f => ({ ...f, [key]: value }))
-    isDirtyRef.current = true
+    markDirty()
     if (errors[key as string]) setErrors(e => ({ ...e, [key]: '' }))
   }
 
   const validate = () => {
     const e: Record<string, string> = {}
     if (!form.full_name?.trim()) e.full_name = 'שם הוא שדה חובה'
+
+    const phone = form.phone?.trim() || ''
+    if (phone) {
+      if (!isValidIsraeliMobilePhone(phone)) e.phone = PHONE_ERROR
+    }
+
+    const email = form.email?.trim() || ''
+    if (email && !isValidEmail(email)) e.email = EMAIL_ERROR
+
     setErrors(e)
     return Object.keys(e).length === 0
   }
 
   const handleSave = () => {
     if (!validate()) return
-    onSave(form)
+    const normalized = form.phone ? normalizeIsraeliPhone(form.phone) : form.phone
+    isDirtyRef.current = false
+    onSave({ ...form, phone: normalized || undefined })
     onClose()
   }
 
-  const handleClose = () => {
-    if (isDirtyRef.current) {
-      setConfirmClose(true)
-    } else {
-      onClose()
-    }
-  }
+  const handleClose = () => tryClose(onClose)
 
   return (
     <>
@@ -73,14 +78,14 @@ export function LeadForm({ open, onClose, lead, customers = [], onSave }: LeadFo
               <FormField label="שם מלא" required error={errors.full_name} htmlFor="full_name">
                 <Input id="full_name" value={form.full_name || ''} onChange={e => set('full_name', e.target.value)} placeholder="שם ומשפחה" error={!!errors.full_name} />
               </FormField>
-              <FormField label="טלפון" htmlFor="phone">
-                <Input id="phone" value={form.phone || ''} onChange={e => set('phone', e.target.value)} placeholder="050-0000000" />
+              <FormField label="טלפון" error={errors.phone} htmlFor="phone">
+                <Input id="phone" value={form.phone || ''} onChange={e => set('phone', e.target.value)} placeholder="0500000000" error={!!errors.phone} />
               </FormField>
               <FormField label="אינסטגרם" htmlFor="instagram">
                 <Input id="instagram" value={form.instagram || ''} onChange={e => set('instagram', e.target.value)} placeholder="@username" />
               </FormField>
-              <FormField label="אימייל" htmlFor="email">
-                <Input id="email" type="email" value={form.email || ''} onChange={e => set('email', e.target.value)} placeholder="example@email.com" />
+              <FormField label='דוא"ל' error={errors.email} htmlFor="email">
+                <Input id="email" type="email" value={form.email || ''} onChange={e => set('email', e.target.value)} placeholder="example@email.com" error={!!errors.email} />
               </FormField>
               <FormField label="מקור" htmlFor="source">
                 <Select id="source" value={form.source || ''} onChange={e => set('source', e.target.value)}>
@@ -175,10 +180,12 @@ export function LeadForm({ open, onClose, lead, customers = [], onSave }: LeadFo
       <ConfirmDialog
         open={confirmClose}
         onClose={() => setConfirmClose(false)}
-        onConfirm={() => { setConfirmClose(false); onClose() }}
+        onConfirm={() => confirmAndClose(onClose)}
         title="יציאה ללא שמירה"
-        description="יש פרטים שלא נשמרו. האם לצאת?"
-        confirmLabel="צא ללא שמירה"
+        description="יש שינויים שלא נשמרו. לצאת בלי לשמור?"
+        confirmLabel="צא בלי לשמור"
+        cancelLabel="המשך עריכה"
+        variant="default"
       />
     </>
   )

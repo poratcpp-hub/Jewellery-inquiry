@@ -103,12 +103,24 @@ export function getDealQuality(profitMargin: number): { label: string; color: st
 export function getNextAction(lead: Partial<Lead>): {
   title: string
   description: string
-  action: 'reply' | 'fill_details' | 'create_quote' | 'follow_up' | 'done'
+  action: 'link_customer' | 'reply' | 'fill_details' | 'create_quote' | 'follow_up' | 'create_order' | 'view_order' | 'done'
 } {
   const status = lead.lead_status ?? ''
 
-  if (status === 'נסגר להזמנה') return { title: 'הליד הומר להזמנה', description: '', action: 'done' }
-  if (status === 'לא רלוונטי') return { title: 'ליד לא רלוונטי', description: '', action: 'done' }
+  if (status === 'לא רלוונטי')
+    return { title: 'ליד לא רלוונטי', description: '', action: 'done' }
+
+  // Has order already
+  if (lead.order_id)
+    return { title: 'הזמנה קיימת', description: 'לחץ לפתיחת ההזמנה המקושרת', action: 'view_order' }
+
+  // Closed but no order yet — needs to create one
+  if (status === 'נסגר להזמנה')
+    return { title: 'פתח הזמנה', description: 'הליד נסגר להזמנה — יש לפתוח הזמנה', action: 'create_order' }
+
+  // No customer linked
+  if (!lead.customer_id)
+    return { title: 'קשר לקוח', description: 'לא קושר לקוח לליד הזה', action: 'link_customer' }
 
   if (!lead.jewelry_type && !lead.original_message)
     return { title: 'צריך מענה ראשוני', description: 'שלח הודעה ראשונית ללקוח', action: 'reply' }
@@ -120,7 +132,7 @@ export function getNextAction(lead: Partial<Lead>): {
   if (lead.quote_id && (status === 'נשלחה הצעת מחיר' || status === 'פולואפ ראשון' || status === 'פולואפ שני'))
     return { title: 'מחכה לאישור הצעה', description: 'ההצעה נשלחה — בצע פולואפ', action: 'follow_up' }
 
-  if (lead.quote_id && status !== 'נסגר להזמנה')
+  if (lead.quote_id)
     return { title: 'הצעת מחיר בטיוטה', description: 'השלם מחיר ושלח ללקוח', action: 'follow_up' }
 
   return { title: 'מוכן להצעת מחיר', description: 'כל הפרטים קיימים — צור הצעת מחיר', action: 'create_quote' }
