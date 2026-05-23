@@ -13,7 +13,7 @@ import { TableSkeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
 import { useDebounce, useTableSort } from '@/lib/hooks'
 import { formatDate, exportCsv } from '@/lib/utils'
-import { getCustomers, upsertCustomer, deleteCustomer } from '@/lib/data'
+import { getCustomers, upsertCustomer, deleteCustomer, patchCustomer } from '@/lib/data'
 import { CUSTOMER_STATUSES } from '@/lib/constants'
 import { InlineStatusSelect } from '@/components/ui/inline-status-select'
 import type { Customer } from '@/lib/types'
@@ -102,7 +102,7 @@ export default function CustomersPage() {
 
   const handleStatusChange = useCallback(async (customer: Customer, newStatus: string) => {
     try {
-      await upsertCustomer({ id: customer.id, customer_status: newStatus, full_name: customer.full_name })
+      await patchCustomer(customer.id, { customer_status: newStatus })
       setCustomers(prev => prev.map(c => c.id === customer.id ? { ...c, customer_status: newStatus } : c))
     } catch {
       toast({ type: 'error', title: 'שגיאה בעדכון סטטוס' })

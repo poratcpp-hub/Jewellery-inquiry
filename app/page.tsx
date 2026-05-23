@@ -209,7 +209,7 @@ export default function DashboardPage() {
       // ── 3. orders — direct query, no lib/data wrapper, no joins ─────────────
       const { data: ordersData, error: ordersErr } = await supabase
         .from('orders')
-        .select('id, order_number, order_status, payment_status, sale_price, net_profit, balance_due, delivery_date, customer_id, created_at')
+        .select('id, order_number, order_status, payment_status, sale_price, net_profit, balance_due, delivery_date, customer_id, jewelry_type, created_at')
         .order('created_at', { ascending: false })
       if (ordersErr) {
         logSupabaseError('orders simple query failed', ordersErr)

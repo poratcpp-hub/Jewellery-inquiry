@@ -13,7 +13,7 @@ import { TableSkeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
 import { useDebounce, useTableSort } from '@/lib/hooks'
 import { formatCurrency, formatDate, daysUntil, exportCsv } from '@/lib/utils'
-import { getOrders, upsertOrder, deleteOrder, getCustomers, getSuppliers, refreshCustomerStats } from '@/lib/data'
+import { getOrders, upsertOrder, deleteOrder, getCustomers, getSuppliers, refreshCustomerStats, patchOrder } from '@/lib/data'
 import { ORDER_STATUSES, PAYMENT_STATUSES, CLOSED_ORDER_STATUSES } from '@/lib/constants'
 import { InlineStatusSelect } from '@/components/ui/inline-status-select'
 import type { Order, Customer, Supplier } from '@/lib/types'
@@ -98,7 +98,7 @@ export default function OrdersPage() {
 
   const handleStatusChange = useCallback(async (order: Order, newStatus: string) => {
     try {
-      await upsertOrder({ id: order.id, order_status: newStatus, customer_id: order.customer_id || undefined })
+      await patchOrder(order.id, { order_status: newStatus })
       setOrders(prev => prev.map(o => o.id === order.id ? { ...o, order_status: newStatus } : o))
     } catch {
       toast({ type: 'error', title: 'שגיאה בעדכון סטטוס' })
@@ -107,7 +107,7 @@ export default function OrdersPage() {
 
   const handlePaymentStatusChange = useCallback(async (order: Order, newStatus: string) => {
     try {
-      await upsertOrder({ id: order.id, payment_status: newStatus, customer_id: order.customer_id || undefined })
+      await patchOrder(order.id, { payment_status: newStatus })
       setOrders(prev => prev.map(o => o.id === order.id ? { ...o, payment_status: newStatus } : o))
     } catch {
       toast({ type: 'error', title: 'שגיאה בעדכון סטטוס תשלום' })

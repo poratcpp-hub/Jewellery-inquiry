@@ -1,5 +1,5 @@
 /**
- * Data access layer — v3 (no embedded joins, logSupabaseError exported)
+ * Data access layer — v4 (patch helpers, no embedded joins, full error logging)
  * NEXT_PUBLIC_DEMO_MODE=true → all reads return in-memory demo data.
  */
 import { supabase } from './supabase'
@@ -36,6 +36,34 @@ export function logSupabaseError(context: string, error: any) {
   } catch {
     console.error(`[Supabase] ❌ ${context} →`, String(error))
   }
+}
+
+// ─── Safe partial updates — only touches the specified columns ────────────────
+// Use these instead of upsert() for inline status/priority changes.
+// upsert() with partial objects silently resets unspecified nullable columns to null.
+
+export async function patchCustomer(id: string, fields: Partial<Customer>): Promise<void> {
+  if (IS_DEMO) return
+  const { error } = await supabase.from('customers').update(fields).eq('id', id)
+  if (error) logSupabaseError(`patchCustomer(${id})`, error)
+}
+
+export async function patchLead(id: string, fields: Partial<Lead>): Promise<void> {
+  if (IS_DEMO) return
+  const { error } = await supabase.from('leads').update(fields).eq('id', id)
+  if (error) logSupabaseError(`patchLead(${id})`, error)
+}
+
+export async function patchOrder(id: string, fields: Partial<Order>): Promise<void> {
+  if (IS_DEMO) return
+  const { error } = await supabase.from('orders').update(fields).eq('id', id)
+  if (error) logSupabaseError(`patchOrder(${id})`, error)
+}
+
+export async function patchQuote(id: string, fields: Partial<Quote>): Promise<void> {
+  if (IS_DEMO) return
+  const { error } = await supabase.from('quotes').update(fields).eq('id', id)
+  if (error) logSupabaseError(`patchQuote(${id})`, error)
 }
 
 // ─── Join helpers ─────────────────────────────────────────────────────────────

@@ -77,7 +77,7 @@ export function calculateOrderFinancials(order: {
   const deposit_amount = order.deposit_amount || 0
   const total_cost = order.total_cost || 0
 
-  const balance_due = sale_price - deposit_amount
+  const balance_due = Math.max(0, sale_price - deposit_amount)
   const net_profit = sale_price - total_cost
   const profit_margin = sale_price > 0 ? (net_profit / sale_price) * 100 : 0
 

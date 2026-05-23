@@ -10,7 +10,7 @@ import { Select } from '@/components/ui/select'
 import { Badge, getStatusBadgeVariant } from '@/components/ui/badge'
 import { useToast } from '@/components/ui/toast'
 import { formatCurrency, formatDate, daysUntil, getProfitColor } from '@/lib/utils'
-import { getOrder, upsertOrder, insertPayment } from '@/lib/data'
+import { getOrder, upsertOrder, insertPayment, patchOrder } from '@/lib/data'
 import { PRODUCTION_STATUSES, ORDER_STATUSES, PAYMENT_TYPES, PAYMENT_METHODS } from '@/lib/constants'
 import type { Order, Payment } from '@/lib/types'
 import { ArrowRight, ExternalLink, Plus, CheckCircle, Circle, Calendar, AlertTriangle } from 'lucide-react'
@@ -63,8 +63,8 @@ export default function OrderDetailPage() {
   const handleStatusChange = useCallback(async (field: 'order_status' | 'production_status', value: string) => {
     if (!order) return
     try {
-      const updated = await upsertOrder({ ...order, [field]: value })
-      setOrder(o => o ? { ...o, [field]: updated[field] } : o)
+      await patchOrder(order.id, { [field]: value })
+      setOrder(o => o ? { ...o, [field]: value } : o)
       toast({ type: 'success', title: 'סטטוס עודכן' })
     } catch {
       toast({ type: 'error', title: 'שגיאה בעדכון' })
@@ -262,11 +262,11 @@ export default function OrderDetailPage() {
             </div>
             <div>
               <p className="text-xs text-[#7a6a52] mb-0.5">רווח נקי</p>
-              <p className={cn('font-medium', getProfitColor(order.profit_margin))}>{formatCurrency(order.net_profit)}</p>
+              <p className={cn('font-medium', getProfitColor(order.profit_margin ?? 0))}>{formatCurrency(order.net_profit ?? 0)}</p>
             </div>
             <div>
               <p className="text-xs text-[#7a6a52] mb-0.5">מרווח</p>
-              <p className={cn('font-medium', getProfitColor(order.profit_margin))}>{order.profit_margin.toFixed(1)}%</p>
+              <p className={cn('font-medium', getProfitColor(order.profit_margin ?? 0))}>{(order.profit_margin ?? 0).toFixed(1)}%</p>
             </div>
           </div>
         </div>

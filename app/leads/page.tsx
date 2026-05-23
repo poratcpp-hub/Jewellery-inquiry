@@ -13,7 +13,7 @@ import { TableSkeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
 import { useDebounce, useTableSort } from '@/lib/hooks'
 import { formatCurrency, formatDate, isOverdue, exportCsv } from '@/lib/utils'
-import { getLeads, upsertLead, deleteLead, getCustomers } from '@/lib/data'
+import { getLeads, upsertLead, deleteLead, getCustomers, patchLead } from '@/lib/data'
 import { LEAD_STATUSES, LEAD_PRIORITIES, CLOSED_LEAD_STATUSES } from '@/lib/constants'
 import { InlineStatusSelect } from '@/components/ui/inline-status-select'
 import type { Lead, Customer } from '@/lib/types'
@@ -89,7 +89,7 @@ export default function LeadsPage() {
 
   const handleStatusChange = useCallback(async (lead: Lead, newStatus: string) => {
     try {
-      await upsertLead({ id: lead.id, lead_status: newStatus })
+      await patchLead(lead.id, { lead_status: newStatus })
       setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, lead_status: newStatus } : l))
     } catch {
       toast({ type: 'error', title: 'שגיאה בעדכון סטטוס' })
@@ -98,7 +98,7 @@ export default function LeadsPage() {
 
   const handlePriorityChange = useCallback(async (lead: Lead, newPriority: string) => {
     try {
-      await upsertLead({ id: lead.id, priority: newPriority })
+      await patchLead(lead.id, { priority: newPriority })
       setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, priority: newPriority } : l))
     } catch {
       toast({ type: 'error', title: 'שגיאה בעדכון עדיפות' })

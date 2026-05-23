@@ -10,7 +10,7 @@ import { Select } from '@/components/ui/select'
 import { useToast } from '@/components/ui/toast'
 import { QuoteForm } from '@/components/quotes/quote-form'
 import { formatCurrency, formatDate, generateOrderNumber, getProfitColor } from '@/lib/utils'
-import { getQuote, upsertQuote, upsertOrder, getCustomers, findCustomerByContact, upsertCustomer, upsertLead, refreshCustomerStats } from '@/lib/data'
+import { getQuote, upsertQuote, upsertOrder, getCustomers, findCustomerByContact, upsertCustomer, upsertLead, refreshCustomerStats, patchQuote } from '@/lib/data'
 import { getDealQuality, generateQuoteMessage } from '@/lib/workflow'
 import { QUOTE_STATUSES } from '@/lib/constants'
 import type { Quote, Customer } from '@/lib/types'
@@ -54,8 +54,8 @@ export default function QuoteDetailPage() {
   const handleStatusChange = useCallback(async (newStatus: string) => {
     if (!quote) return
     try {
-      const updated = await upsertQuote({ ...quote, quote_status: newStatus })
-      setQuote(q => q ? { ...q, quote_status: updated.quote_status } : q)
+      await patchQuote(quote.id, { quote_status: newStatus })
+      setQuote(q => q ? { ...q, quote_status: newStatus } : q)
       toast({ type: 'success', title: 'סטטוס עודכן' })
     } catch {
       toast({ type: 'error', title: 'שגיאה בעדכון סטטוס' })
@@ -165,7 +165,7 @@ export default function QuoteDetailPage() {
     </Shell>
   )
 
-  const { label: dealLabel, color: dealColor } = getDealQuality(quote.profit_margin)
+  const { label: dealLabel, color: dealColor } = getDealQuality(quote.profit_margin ?? 0)
   const isClosed = ['אושרה', 'נדחתה', 'פג תוקף'].includes(quote.quote_status)
 
   return (
@@ -310,7 +310,7 @@ export default function QuoteDetailPage() {
             <div>
               <p className="text-xs text-[#7a6a52] mb-0.5">מרווח</p>
               <p className={cn('font-bold text-sm', getProfitColor(quote.profit_margin))}>
-                {quote.profit_margin.toFixed(1)}%
+                {(quote.profit_margin ?? 0).toFixed(1)}%
               </p>
             </div>
             <div>
