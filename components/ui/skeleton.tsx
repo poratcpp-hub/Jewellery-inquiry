@@ -4,7 +4,7 @@ export function Skeleton({ className }: { className?: string }) {
   return (
     <div
       className={cn(
-        'animate-pulse rounded-lg bg-[#f0ebe0]',
+        'rounded-lg bg-sand-soft bg-gradient-to-l from-sand-soft via-[#f7f3ea] to-sand-soft bg-[length:200%_100%] animate-shimmer',
         className
       )}
     />
@@ -32,7 +32,7 @@ export function MetricsSkeleton() {
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
       {Array.from({ length: 4 }).map((_, i) => (
-        <div key={i} className="rounded-xl bg-white border border-[#e5ddd0] p-5 space-y-3">
+        <div key={i} className="rounded-xl bg-white border border-sand p-5 space-y-3 shadow-card">
           <Skeleton className="h-3 w-24" />
           <Skeleton className="h-7 w-32" />
           <Skeleton className="h-3 w-20" />

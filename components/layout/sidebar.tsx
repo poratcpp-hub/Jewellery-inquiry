@@ -51,13 +51,14 @@ export function Sidebar({ open, onClose, onNewInquiry }: SidebarProps) {
 
       <aside
         className={cn(
-          'fixed top-0 right-0 h-full w-64 bg-[#2c1810] z-40 flex flex-col transition-transform duration-300',
+          'fixed top-0 right-0 h-full w-64 bg-gradient-to-b from-[#231208] via-[#2c1810] to-[#1d0f07] z-40 flex flex-col transition-transform duration-300 border-l border-white/[0.06]',
           'lg:translate-x-0 lg:static lg:z-auto',
           open ? 'translate-x-0' : 'translate-x-full lg:translate-x-0'
         )}
       >
         {/* Logo */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
+        <div className="relative flex items-center justify-between px-5 py-5 border-b border-white/[0.07]">
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-gradient-to-l from-transparent via-gold-500/50 to-transparent" />
           <div className="flex-1 flex justify-center">
             <Image
               src="/porat-logo.svg"
@@ -81,7 +82,7 @@ export function Sidebar({ open, onClose, onNewInquiry }: SidebarProps) {
           {onNewInquiry && (
             <button
               onClick={() => { onNewInquiry(); onClose?.() }}
-              className="w-full flex items-center gap-2 px-3 py-3 mb-3 rounded-xl bg-[#b8934a] text-white font-semibold text-sm hover:bg-[#a07840] transition-colors shadow-sm"
+              className="w-full flex items-center justify-center gap-2 px-3 py-3 mb-4 rounded-xl bg-gradient-to-b from-gold-400 to-gold-600 text-white font-semibold text-sm shadow-gold hover:shadow-gold-hover hover:-translate-y-px active:translate-y-0 transition-all duration-200 [text-shadow:0_1px_1px_rgba(90,64,20,0.3)]"
             >
               <Plus size={18} className="shrink-0" />
               + ליד חדש
@@ -99,8 +100,8 @@ export function Sidebar({ open, onClose, onNewInquiry }: SidebarProps) {
                     className={cn(
                       'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200',
                       isActive
-                        ? 'bg-[#b8934a] text-white shadow-sm'
-                        : 'text-white/70 hover:text-white hover:bg-white/10'
+                        ? 'bg-gradient-to-l from-gold-500/90 to-gold-600/90 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.15),0_2px_8px_rgba(0,0,0,0.25)]'
+                        : 'text-white/60 hover:text-white hover:bg-white/[0.07] hover:translate-x-[-2px]'
                     )}
                   >
                     <Icon size={18} className="shrink-0" />
@@ -116,9 +117,9 @@ export function Sidebar({ open, onClose, onNewInquiry }: SidebarProps) {
         </nav>
 
         {/* Footer */}
-        <div className="px-4 py-4 border-t border-white/10">
-          <div className="text-xs text-white/40 text-center">
-            © 2025 PORAT Private Jeweler
+        <div className="px-4 py-4 border-t border-white/[0.07]">
+          <div className="text-[11px] text-white/35 text-center tracking-[0.2em] uppercase">
+            Porat · Private Jeweler
           </div>
         </div>
       </aside>

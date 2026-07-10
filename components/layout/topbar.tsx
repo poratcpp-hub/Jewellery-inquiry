@@ -107,7 +107,7 @@ export function Topbar({ onMenuClick, title, onNewInquiry }: TopbarProps) {
   }
 
   return (
-    <header className="h-16 bg-white border-b border-[#e5ddd0] flex items-center justify-between px-4 sm:px-6 sticky top-0 z-20 shadow-[0_1px_4px_rgba(26,18,9,0.04)]">
+    <header className="h-16 bg-white/80 backdrop-blur-md border-b border-sand/80 flex items-center justify-between px-4 sm:px-6 sticky top-0 z-20 shadow-[0_1px_4px_rgba(26,18,9,0.04)]">
       <div className="flex items-center gap-3">
         <button
           onClick={onMenuClick}
@@ -127,7 +127,7 @@ export function Topbar({ onMenuClick, title, onNewInquiry }: TopbarProps) {
         {onNewInquiry && (
           <button
             onClick={onNewInquiry}
-            className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#b8934a] text-white text-sm font-medium hover:bg-[#a07840] transition-colors shadow-sm"
+            className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-b from-gold-400 to-gold-600 text-white text-sm font-medium shadow-gold hover:shadow-gold-hover hover:-translate-y-px active:translate-y-0 transition-all duration-200"
           >
             <Plus size={15} />
             + ליד חדש
@@ -155,7 +155,7 @@ export function Topbar({ onMenuClick, title, onNewInquiry }: TopbarProps) {
           </button>
 
           {bellOpen && (
-            <div className="absolute left-0 mt-1 w-80 bg-white rounded-xl border border-[#e5ddd0] shadow-lg z-50 overflow-hidden">
+            <div className="absolute left-0 mt-1 w-80 bg-white rounded-xl border border-sand shadow-pop z-50 overflow-hidden animate-dialog-in">
               <div className="px-4 py-2.5 border-b border-[#f0ebe0] flex items-center justify-between">
                 <p className="text-sm font-semibold text-[#2c1810]">התראות</p>
                 {alerts.length > 0 && (
@@ -189,7 +189,7 @@ export function Topbar({ onMenuClick, title, onNewInquiry }: TopbarProps) {
             onClick={() => setMenuOpen(v => !v)}
             className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-[#f5efe0] transition-colors"
           >
-            <div className="w-8 h-8 rounded-full bg-[#b8934a] flex items-center justify-center shrink-0">
+            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gold-400 to-gold-600 ring-2 ring-gold-200/70 flex items-center justify-center shrink-0">
               <User size={14} className="text-white" />
             </div>
             {!IS_DEMO && userEmail && (
@@ -199,7 +199,7 @@ export function Topbar({ onMenuClick, title, onNewInquiry }: TopbarProps) {
           </button>
 
           {menuOpen && !IS_DEMO && (
-            <div className="absolute left-0 mt-1 w-52 bg-white rounded-xl border border-[#e5ddd0] shadow-lg z-50 py-1 overflow-hidden">
+            <div className="absolute left-0 mt-1 w-52 bg-white rounded-xl border border-sand shadow-pop z-50 py-1 overflow-hidden animate-dialog-in">
               {userEmail && (
                 <div className="px-4 py-2.5 border-b border-[#f0ebe0]">
                   <p className="text-xs text-[#7a6a52]">מחובר כ</p>

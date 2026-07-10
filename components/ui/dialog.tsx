@@ -26,12 +26,12 @@ export function Dialog({ open, onClose, children, className }: DialogProps) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center" dir="rtl">
       <div
-        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+        className="absolute inset-0 bg-[#1a1209]/50 backdrop-blur-sm animate-overlay-in"
         onClick={onClose}
       />
       <div
         className={cn(
-          'relative z-10 bg-white rounded-2xl shadow-[0_20px_60px_rgba(26,18,9,0.15)] w-full max-h-[90vh] overflow-y-auto',
+          'relative z-10 bg-white rounded-2xl shadow-pop ring-1 ring-sand/60 w-full max-h-[90vh] overflow-y-auto animate-dialog-in',
           className
         )}
       >
@@ -48,8 +48,8 @@ interface DialogHeaderProps {
 
 export function DialogHeader({ title, onClose }: DialogHeaderProps) {
   return (
-    <div className="flex items-center justify-between p-6 border-b border-[#e5ddd0]">
-      <h2 className="text-lg font-semibold text-[#2c1810]">{title}</h2>
+    <div className="flex items-center justify-between p-6 border-b border-sand-soft">
+      <h2 className="font-display text-xl font-semibold text-ink">{title}</h2>
       <button
         onClick={onClose}
         className="p-1.5 rounded-lg text-[#7a6a52] hover:bg-[#f5efe0] hover:text-[#2c1810] transition-colors"
@@ -70,7 +70,7 @@ export function DialogBody({ children, className }: { children: React.ReactNode;
 
 export function DialogFooter({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex items-center justify-end gap-3 p-6 border-t border-[#e5ddd0] bg-[#faf8f5] rounded-b-2xl">
+    <div className="flex items-center justify-end gap-3 p-6 border-t border-sand-soft bg-cream rounded-b-2xl">
       {children}
     </div>
   )

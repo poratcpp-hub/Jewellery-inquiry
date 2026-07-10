@@ -91,7 +91,7 @@ export default function LoginPage() {
 
         {/* Card */}
         <div
-          className="rounded-2xl px-8 py-10"
+          className="rounded-2xl px-8 py-10 animate-rise-in"
           style={{
             backgroundColor: '#ffffff',
             boxShadow: '0 4px 32px rgba(44, 24, 16, 0.10), 0 1px 4px rgba(184, 147, 74, 0.08)',
@@ -109,7 +109,7 @@ export default function LoginPage() {
               />
             </div>
             <h1
-              className="text-xl font-semibold tracking-wide"
+              className="font-display text-2xl font-semibold tracking-wide"
               style={{ color: '#2c1810' }}
             >
               כניסה למערכת

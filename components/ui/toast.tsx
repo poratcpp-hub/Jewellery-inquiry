@@ -72,7 +72,7 @@ function ToastContainer({ toasts, dismiss }: { toasts: ToastMessage[]; dismiss: 
         <div
           key={t.id}
           className={cn(
-            'flex items-start gap-3 p-3.5 rounded-xl border shadow-[0_4px_20px_rgba(26,18,9,0.12)] bg-white animate-in slide-in-from-bottom-2',
+            'flex items-start gap-3 p-3.5 rounded-xl border shadow-pop bg-white animate-toast-in',
             STYLES[t.type]
           )}
         >

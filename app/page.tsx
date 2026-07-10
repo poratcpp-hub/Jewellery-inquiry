@@ -277,9 +277,10 @@ export default function DashboardPage() {
   return (
     <Shell title="דשבורד">
       <div className="max-w-7xl mx-auto space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold text-[#2c1810]">שלום, ברוכים הבאים 👋</h1>
-          <p className="text-[#7a6a52] text-sm mt-0.5">PORAT Private Jeweler · סקירה כללית לחודש הנוכחי</p>
+        <div className="animate-rise-in">
+          <h1 className="font-display text-[1.8rem] leading-tight font-semibold text-ink">שלום, ברוכים הבאים 👋</h1>
+          <div className="mt-2 mb-1 h-0.5 w-12 rounded-full bg-gradient-to-l from-gold-400 to-gold-600" />
+          <p className="text-clay text-sm mt-1.5 tracking-wide">PORAT Private Jeweler · סקירה כללית לחודש הנוכחי</p>
         </div>
 
         {dbError && <DbErrorBanner error={dbError} />}

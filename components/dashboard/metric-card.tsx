@@ -12,11 +12,11 @@ interface MetricCardProps {
 }
 
 const variantConfig = {
-  default: { bg: 'bg-white', icon: 'bg-[#f5efe0] text-[#b8934a]', border: 'border-[#e5ddd0]' },
-  gold:    { bg: 'bg-[#b8934a]', icon: 'bg-white/20 text-white', border: 'border-[#b8934a]' },
-  success: { bg: 'bg-white', icon: 'bg-emerald-50 text-emerald-600', border: 'border-[#e5ddd0]' },
-  warning: { bg: 'bg-white', icon: 'bg-amber-50 text-amber-600', border: 'border-[#e5ddd0]' },
-  danger:  { bg: 'bg-white', icon: 'bg-red-50 text-red-600', border: 'border-[#e5ddd0]' },
+  default: { bg: 'bg-white', icon: 'bg-champagne text-gold-600 ring-1 ring-gold-200/60', border: 'border-sand' },
+  gold:    { bg: 'bg-gradient-to-br from-gold-400 via-gold-500 to-gold-600', icon: 'bg-white/20 text-white ring-1 ring-white/25', border: 'border-gold-500' },
+  success: { bg: 'bg-white', icon: 'bg-emerald-50 text-emerald-600 ring-1 ring-emerald-100', border: 'border-sand' },
+  warning: { bg: 'bg-white', icon: 'bg-amber-50 text-amber-600 ring-1 ring-amber-100', border: 'border-sand' },
+  danger:  { bg: 'bg-white', icon: 'bg-red-50 text-red-600 ring-1 ring-red-100', border: 'border-sand' },
 } as const
 
 export const MetricCard = React.memo(function MetricCard({
@@ -27,19 +27,23 @@ export const MetricCard = React.memo(function MetricCard({
 
   return (
     <div className={cn(
-      'rounded-xl border p-5 shadow-[0_1px_8px_rgba(26,18,9,0.06)] transition-shadow duration-200 hover:shadow-[0_4px_20px_rgba(26,18,9,0.1)]',
+      'group relative overflow-hidden rounded-xl border p-5 shadow-card transition-all duration-300 hover:shadow-card-hover hover:-translate-y-0.5',
       config.bg, config.border, className
     )}>
-      <div className="flex items-start justify-between">
+      {/* Soft sheen sweeping across the gold card */}
+      {isGold && (
+        <div className="pointer-events-none absolute -inset-y-8 -left-24 w-20 rotate-12 bg-white/15 blur-xl transition-transform duration-700 group-hover:translate-x-[22rem]" />
+      )}
+      <div className="relative flex items-start justify-between">
         <div className="flex-1 min-w-0">
-          <p className={cn('text-xs font-medium mb-1', isGold ? 'text-white/80' : 'text-[#7a6a52]')}>
+          <p className={cn('text-xs font-medium mb-1', isGold ? 'text-white/85' : 'text-clay')}>
             {title}
           </p>
-          <p className={cn('text-2xl font-bold tracking-tight', isGold ? 'text-white' : 'text-[#2c1810]')}>
+          <p className={cn('text-2xl font-bold tracking-tight tabular-nums', isGold ? 'text-white [text-shadow:0_1px_2px_rgba(90,64,20,0.25)]' : 'text-ink')}>
             {value}
           </p>
           {subtitle && (
-            <p className={cn('text-xs mt-1', isGold ? 'text-white/70' : 'text-[#7a6a52]')}>{subtitle}</p>
+            <p className={cn('text-xs mt-1', isGold ? 'text-white/75' : 'text-clay')}>{subtitle}</p>
           )}
           {trend && (
             <div className="flex items-center gap-1 mt-2">
@@ -47,13 +51,16 @@ export const MetricCard = React.memo(function MetricCard({
                 ? isGold ? 'text-white/90' : 'text-emerald-600'
                 : isGold ? 'text-white/90' : 'text-red-600'
               )}>
-                {trend.value >= 0 ? '↑' : '↓'} {Math.abs(trend.value)}%
+                {trend.value >= 0 ? '\u2191' : '\u2193'} {Math.abs(trend.value)}%
               </span>
-              <span className={cn('text-xs', isGold ? 'text-white/60' : 'text-[#7a6a52]')}>{trend.label}</span>
+              <span className={cn('text-xs', isGold ? 'text-white/60' : 'text-clay')}>{trend.label}</span>
             </div>
           )}
         </div>
-        <div className={cn('w-11 h-11 rounded-xl flex items-center justify-center shrink-0', config.icon)}>
+        <div className={cn(
+          'w-11 h-11 rounded-xl flex items-center justify-center shrink-0 transition-transform duration-300 group-hover:scale-110',
+          config.icon
+        )}>
           {icon}
         </div>
       </div>
