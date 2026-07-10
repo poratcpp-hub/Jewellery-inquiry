@@ -9,8 +9,8 @@ import { Badge, getStatusBadgeVariant } from '@/components/ui/badge'
 import { Select } from '@/components/ui/select'
 import { useToast } from '@/components/ui/toast'
 import { QuoteForm } from '@/components/quotes/quote-form'
-import { formatCurrency, formatDate, generateOrderNumber, getProfitColor } from '@/lib/utils'
-import { getQuote, upsertQuote, upsertOrder, getCustomers, findCustomerByContact, upsertCustomer, upsertLead, refreshCustomerStats } from '@/lib/data'
+import { formatCurrency, formatDate, getProfitColor } from '@/lib/utils'
+import { getQuote, upsertQuote, getCustomers, changeQuoteStatus, createOrderFromLeadOrQuote } from '@/lib/data'
 import { getDealQuality, generateQuoteMessage } from '@/lib/workflow'
 import { QUOTE_STATUSES } from '@/lib/constants'
 import type { Quote, Customer } from '@/lib/types'
@@ -54,9 +54,14 @@ export default function QuoteDetailPage() {
   const handleStatusChange = useCallback(async (newStatus: string) => {
     if (!quote) return
     try {
-      const updated = await upsertQuote({ ...quote, quote_status: newStatus })
-      setQuote(q => q ? { ...q, quote_status: updated.quote_status } : q)
-      toast({ type: 'success', title: 'סטטוס עודכן' })
+      await changeQuoteStatus(quote, newStatus)
+      setQuote(q => q ? { ...q, quote_status: newStatus } : q)
+      toast({
+        type: 'success',
+        title: 'סטטוס עודכן',
+        description: newStatus === 'נשלחה ללקוח' && quote.lead_id
+          ? 'הליד עודכן ונקבע מעקב אוטומטי בעוד 3 ימים' : undefined,
+      })
     } catch {
       toast({ type: 'error', title: 'שגיאה בעדכון סטטוס' })
     }
@@ -66,71 +71,20 @@ export default function QuoteDetailPage() {
     if (!quote) return
     setConverting(true)
     try {
-      const lead = quote.leads
-
-      // Find or create customer
-      let customer = quote.customers || null
-      if (!customer) {
-        customer = await findCustomerByContact(
-          lead?.phone || undefined,
-          lead?.instagram || undefined,
-          lead?.email || undefined,
-        )
-      }
-      if (!customer) {
-        customer = await upsertCustomer({
-          full_name: lead?.full_name || 'לקוח חדש',
-          phone: lead?.phone || undefined,
-          instagram: lead?.instagram || undefined,
-          email: lead?.email || undefined,
-          source: lead?.source || undefined,
-          customer_status: 'לקוח חדש',
-        })
-        toast({ type: 'success', title: 'לקוח חדש נוצר', description: `"${customer.full_name}" נוסף לרשימת הלקוחות` })
-      }
-
-      // Create order
-      const order = await upsertOrder({
-        order_number: generateOrderNumber(),
-        customer_id: customer.id,
-        quote_id: quote.id,
-        lead_id: lead?.id || undefined,
-        jewelry_type: quote.jewelry_type,
-        description: quote.description,
-        diamond_type: quote.diamond_type,
-        diamond_origin: quote.diamond_origin,
-        diamond_certificate: quote.diamond_certificate,
-        gold_type: quote.gold_type,
-        gold_color: quote.gold_color,
-        carat: quote.carat,
-        order_status: 'מחכה למקדמה',
-        payment_status: 'לא שולם',
-        sale_price: quote.sale_price,
-        deposit_amount: 0,
-        balance_due: quote.sale_price,
-        total_cost: quote.total_cost,
-        net_profit: quote.expected_profit,
-        profit_margin: quote.profit_margin,
-      })
-
-      // Update quote and lead atomically
-      await Promise.all([
-        upsertQuote({ ...quote, quote_status: 'אושרה', order_id: order.id, customer_id: customer.id }),
-        lead?.id ? upsertLead({
-          ...lead,
-          lead_status: 'נסגר להזמנה',
-          order_id: order.id,
-          customer_id: customer.id,
-        }) : Promise.resolve(),
-      ])
-
-      await refreshCustomerStats(customer.id)
-
-      setQuote(q => q ? { ...q, quote_status: 'אושרה', order_id: order.id, customer_id: customer!.id, customers: customer! } : q)
+      // Single conversion path shared with the leads flow: finds/creates the
+      // customer, creates the order, links quote + lead, refreshes stats.
+      const { order, alreadyExisted } = await createOrderFromLeadOrQuote({ quoteId: quote.id })
+      setQuote(q => q ? {
+        ...q,
+        quote_status: 'אושרה',
+        order_id: order.id,
+        customer_id: order.customer_id,
+        customers: q.customers ?? order.customers,
+      } : q)
       toast({
-        type: 'success',
-        title: 'הזמנה נוצרה!',
-        description: `הזמנה ${order.order_number} נפתחה ומחכה למקדמה`,
+        type: alreadyExisted ? 'info' : 'success',
+        title: alreadyExisted ? 'כבר קיימת הזמנה להצעה זו' : 'הזמנה נוצרה!',
+        description: `הזמנה ${order.order_number} ${alreadyExisted ? 'מקושרת להצעה' : 'נפתחה ומחכה למקדמה'}`,
       })
     } catch (err) {
       console.error(err)

@@ -1,9 +1,5 @@
 'use client'
 
-if (typeof window !== 'undefined') {
-  console.log('[DEBUG FIX ACTIVE] dashboard quotes/orders refactor loaded')
-}
-
 import { useEffect, useState, useMemo } from 'react'
 import { Shell } from '@/components/layout/shell'
 import { MetricCard } from '@/components/dashboard/metric-card'
@@ -15,7 +11,6 @@ import Link from 'next/link'
 import { TrendingUp, TrendingDown, DollarSign, ShoppingBag, FileText, Target, AlertCircle, Calendar, ArrowLeft, AlertTriangle, Clock, WifiOff } from 'lucide-react'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { getPayments, getExpenses, getLeads, getQuotes, getOrders, getCustomers, checkDatabaseConnection, logSupabaseError } from '@/lib/data'
-import { supabase } from '@/lib/supabase'
 import type { DashboardMetrics, Order, Lead, Quote } from '@/lib/types'
 import { CLOSED_ORDER_STATUSES, CLOSED_QUOTE_STATUSES, CLOSED_LEAD_STATUSES } from '@/lib/constants'
 
@@ -197,24 +192,7 @@ export default function DashboardPage() {
         return
       }
 
-      // Step 2: explicit quotes/orders simple health checks
-      const { data: quotesHealth, error: quotesHealthError } = await supabase
-        .from('quotes').select('id').limit(1)
-      if (quotesHealthError) {
-        logSupabaseError('quotes simple health check failed', quotesHealthError)
-      } else {
-        console.log('[Supabase] ✅ quotes simple query OK', quotesHealth)
-      }
-
-      const { data: ordersHealth, error: ordersHealthError } = await supabase
-        .from('orders').select('id').limit(1)
-      if (ordersHealthError) {
-        logSupabaseError('orders simple health check failed', ordersHealthError)
-      } else {
-        console.log('[Supabase] ✅ orders simple query OK', ordersHealth)
-      }
-
-      // Step 3: load all data in parallel, tolerating partial failures
+      // Step 2: load all data in parallel, tolerating partial failures
       const [paymentsR, expensesR, leadsR, quotesR, ordersR, customersR] = await Promise.allSettled([
         getPayments(), getExpenses(), getLeads(), getQuotes(), getOrders(), getCustomers(),
       ])

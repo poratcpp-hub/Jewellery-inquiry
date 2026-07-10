@@ -1,5 +1,5 @@
 /**
- * Data access layer — v3 (no embedded joins, logSupabaseError exported)
+ * Data access layer — all reads/writes go through here.
  * NEXT_PUBLIC_DEMO_MODE=true → all reads return in-memory demo data.
  */
 import { supabase } from './supabase'
@@ -8,14 +8,10 @@ import {
   demoPayments, demoExpenses, demoSuppliers,
 } from './demo-data'
 import type {
-  Customer, Lead, Quote, Order, Payment, Expense, Supplier, DashboardMetrics, Task,
+  Customer, Lead, Quote, Order, Payment, Expense, Supplier,
 } from './types'
 import { normalizeIsraeliPhone } from './validation'
 import { calculateOrderFinancials, generateOrderNumber } from './utils'
-
-if (typeof window !== 'undefined') {
-  console.log('[DEBUG FIX ACTIVE] dashboard quotes/orders refactor loaded')
-}
 
 const IS_DEMO =
   process.env.NEXT_PUBLIC_DEMO_MODE === 'true' ||
@@ -37,31 +33,6 @@ export function logSupabaseError(context: string, error: any) {
   })
 }
 
-// ─── Join helpers ─────────────────────────────────────────────────────────────
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function uniqueIds<T>(records: T[], key: keyof T): string[] {
-  return [...new Set(records.map((r) => r[key] as unknown as string).filter(Boolean))]
-}
-
-export function mapById<T extends { id: string }>(records: T[] = []): Map<string, T> {
-  return new Map(records.map(r => [r.id, r]))
-}
-
-export async function fetchByIds<T>(
-  table: string,
-  ids: string[],
-  columns = '*',
-): Promise<T[]> {
-  if (!ids.length) return []
-  const { data, error } = await supabase.from(table).select(columns).in('id', ids)
-  if (error) {
-    logSupabaseError(`fetchByIds on "${table}"`, error)
-    return []
-  }
-  return (data ?? []) as T[]
-}
-
 // ─── Database health check ────────────────────────────────────────────────────
 
 export async function checkDatabaseConnection(): Promise<{
@@ -81,18 +52,12 @@ export async function checkDatabaseConnection(): Promise<{
       isHostError: custErr.message?.includes('Host not in allowlist'),
     }
   }
-  console.log('[Supabase] ✅ DB connection OK, customers table accessible')
-
-  // Probe all other tables in parallel — each logs its own result
+  // Probe all other tables in parallel — failures are logged but non-fatal
   const probeTargets = ['leads', 'quotes', 'orders', 'payments', 'expenses', 'suppliers'] as const
   await Promise.allSettled(
     probeTargets.map(async t => {
       const { error } = await supabase.from(t).select('id').limit(1)
-      if (error) {
-        logSupabaseError(`${t} health check`, error)
-      } else {
-        console.log(`[Supabase] ✅ ${t} simple query OK`)
-      }
+      if (error) logSupabaseError(`${t} health check`, error)
     })
   )
 
@@ -321,6 +286,20 @@ export async function createOrderFromLeadOrQuote({
     try { quote = await getQuote(resolvedQuoteId) } catch { /* no quote */ }
   }
 
+  // Idempotency on the quote side: an order may already exist for this quote
+  if (quote?.order_id) {
+    try {
+      const existingOrder = await getOrder(quote.order_id)
+      return { order: existingOrder, alreadyExisted: true }
+    } catch { /* order may have been deleted */ }
+  }
+
+  // Pull in the quote's lead so contact details and back-links work when
+  // converting straight from a quote
+  if (!lead && quote?.lead_id) {
+    try { lead = await getLead(quote.lead_id) } catch { /* no lead */ }
+  }
+
   // Determine customer
   let customerId = lead?.customer_id || quote?.customer_id || undefined
   if (!customerId && lead) {
@@ -381,34 +360,6 @@ export async function createOrderFromLeadOrQuote({
   return { order, alreadyExisted: false }
 }
 
-export async function findCustomerByContact(
-  phone?: string,
-  instagram?: string,
-  email?: string,
-): Promise<Customer | null> {
-  if (IS_DEMO) {
-    const c = demoCustomers.find(c =>
-      (phone && c.phone === phone) ||
-      (instagram && c.instagram === instagram) ||
-      (email && c.email === email)
-    )
-    return c ? { ...c, created_at: '', updated_at: '' } : null
-  }
-  if (phone) {
-    const { data } = await supabase.from('customers').select('*').eq('phone', phone).maybeSingle()
-    if (data) return data as Customer
-  }
-  if (instagram) {
-    const { data } = await supabase.from('customers').select('*').eq('instagram', instagram).maybeSingle()
-    if (data) return data as Customer
-  }
-  if (email) {
-    const { data } = await supabase.from('customers').select('*').eq('email', email).maybeSingle()
-    if (data) return data as Customer
-  }
-  return null
-}
-
 // ─── Quotes ──────────────────────────────────────────────────────────────────
 
 export async function getQuotes(): Promise<Quote[]> {
@@ -434,36 +385,41 @@ export async function upsertQuote(quote: Partial<Quote>): Promise<Quote> {
     profit_margin: quote.profit_margin ?? 0, created_at: '', updated_at: '',
   } as Quote
   const { customers: _c, leads: _l, ...rest } = quote as Quote & { customers?: unknown; leads?: unknown }
+  const isUpdate = !!rest.id
+  const num = (v: number | undefined) => v === undefined ? undefined : Number(v)
+  // Fields that are undefined are omitted from the payload, so a partial
+  // update (e.g. status only) never overwrites values it didn't touch.
+  // On insert the DB defaults cover the omitted numeric columns.
   const payload: Record<string, unknown> = {
     quote_number: rest.quote_number,
-    customer_id: rest.customer_id || null,
-    lead_id: rest.lead_id || null,
-    jewelry_type: rest.jewelry_type || null,
-    description: rest.description || null,
-    diamond_type: rest.diamond_type || null,
-    diamond_origin: rest.diamond_origin || null,
-    diamond_certificate: rest.diamond_certificate || null,
-    gold_type: rest.gold_type || null,
-    gold_color: rest.gold_color || null,
-    carat: rest.carat !== undefined ? rest.carat : undefined,
-    diamond_color: rest.diamond_color || null,
-    diamond_clarity: rest.diamond_clarity || null,
-    diamond_cut: rest.diamond_cut || null,
-    diamond_cost: Number(rest.diamond_cost ?? 0),
-    gold_cost: Number(rest.gold_cost ?? 0),
-    labor_cost: Number(rest.labor_cost ?? 0),
-    setting_cost: Number(rest.setting_cost ?? 0),
-    packaging_cost: Number(rest.packaging_cost ?? 0),
-    shipping_cost: Number(rest.shipping_cost ?? 0),
-    other_cost: Number(rest.other_cost ?? 0),
-    total_cost: Number(rest.total_cost ?? 0),
-    sale_price: Number(rest.sale_price ?? 0),
-    expected_profit: Number(rest.expected_profit ?? 0),
-    profit_margin: Number(rest.profit_margin ?? 0),
-    quote_status: rest.quote_status || 'טיוטה',
-    valid_until: rest.valid_until || null,
-    estimated_delivery_time: rest.estimated_delivery_time || null,
-    notes: rest.notes || null,
+    customer_id: rest.customer_id !== undefined ? rest.customer_id || null : undefined,
+    lead_id: rest.lead_id !== undefined ? rest.lead_id || null : undefined,
+    jewelry_type: rest.jewelry_type !== undefined ? rest.jewelry_type || null : undefined,
+    description: rest.description !== undefined ? rest.description || null : undefined,
+    diamond_type: rest.diamond_type !== undefined ? rest.diamond_type || null : undefined,
+    diamond_origin: rest.diamond_origin !== undefined ? rest.diamond_origin || null : undefined,
+    diamond_certificate: rest.diamond_certificate !== undefined ? rest.diamond_certificate || null : undefined,
+    gold_type: rest.gold_type !== undefined ? rest.gold_type || null : undefined,
+    gold_color: rest.gold_color !== undefined ? rest.gold_color || null : undefined,
+    carat: rest.carat,
+    diamond_color: rest.diamond_color !== undefined ? rest.diamond_color || null : undefined,
+    diamond_clarity: rest.diamond_clarity !== undefined ? rest.diamond_clarity || null : undefined,
+    diamond_cut: rest.diamond_cut !== undefined ? rest.diamond_cut || null : undefined,
+    diamond_cost: num(rest.diamond_cost),
+    gold_cost: num(rest.gold_cost),
+    labor_cost: num(rest.labor_cost),
+    setting_cost: num(rest.setting_cost),
+    packaging_cost: num(rest.packaging_cost),
+    shipping_cost: num(rest.shipping_cost),
+    other_cost: num(rest.other_cost),
+    total_cost: num(rest.total_cost),
+    sale_price: num(rest.sale_price),
+    expected_profit: num(rest.expected_profit),
+    profit_margin: num(rest.profit_margin),
+    quote_status: rest.quote_status || (isUpdate ? undefined : 'טיוטה'),
+    valid_until: rest.valid_until !== undefined ? rest.valid_until || null : undefined,
+    estimated_delivery_time: rest.estimated_delivery_time !== undefined ? rest.estimated_delivery_time || null : undefined,
+    notes: rest.notes !== undefined ? rest.notes || null : undefined,
   }
   Object.keys(payload).forEach(k => payload[k] === undefined && delete payload[k])
   if (rest.id) payload.id = rest.id
@@ -477,6 +433,54 @@ export async function deleteQuote(id: string): Promise<void> {
   if (IS_DEMO) return
   const { error } = await supabase.from('quotes').delete().eq('id', id)
   if (error) { logSupabaseError('deleteQuote', error); throw error }
+}
+
+// ─── Quote workflow automation ───────────────────────────────────────────────
+
+/**
+ * Marks sent quotes whose validity date has passed as expired ("פג תוקף"),
+ * both in the DB and in the returned list. Run on quotes-page load so the
+ * pipeline stays truthful without manual bookkeeping.
+ */
+export async function autoExpireQuotes(quotes: Quote[]): Promise<Quote[]> {
+  const today = new Date(); today.setHours(0, 0, 0, 0)
+  const expired = quotes.filter(q =>
+    q.quote_status === 'נשלחה ללקוח' &&
+    q.valid_until && new Date(q.valid_until) < today,
+  )
+  if (!expired.length) return quotes
+
+  await Promise.allSettled(
+    expired.map(q => upsertQuote({ id: q.id, quote_status: 'פג תוקף' })),
+  )
+  const expiredIds = new Set(expired.map(q => q.id))
+  return quotes.map(q => expiredIds.has(q.id) ? { ...q, quote_status: 'פג תוקף' } : q)
+}
+
+/**
+ * Changes a quote's status and runs the follow-up automation: when a quote is
+ * sent to the customer, the linked lead (if still active) moves to
+ * "נשלחה הצעת מחיר" with a follow-up reminder three days out.
+ */
+export async function changeQuoteStatus(quote: Quote, newStatus: string): Promise<Quote> {
+  const updated = await upsertQuote({ id: quote.id, quote_number: quote.quote_number, quote_status: newStatus })
+
+  if (newStatus === 'נשלחה ללקוח' && quote.lead_id) {
+    try {
+      const lead = await getLead(quote.lead_id)
+      if (!['נסגר להזמנה', 'לא רלוונטי'].includes(lead.lead_status)) {
+        const followUp = new Date()
+        followUp.setDate(followUp.getDate() + 3)
+        await upsertLead({
+          id: lead.id,
+          lead_status: 'נשלחה הצעת מחיר',
+          follow_up_date: followUp.toISOString().split('T')[0],
+        })
+      }
+    } catch { /* lead follow-up is best-effort */ }
+  }
+
+  return { ...quote, quote_status: updated.quote_status }
 }
 
 // ─── Orders ──────────────────────────────────────────────────────────────────
@@ -502,36 +506,43 @@ export async function upsertOrder(order: Partial<Order>): Promise<Order> {
     net_profit: order.net_profit ?? 0, profit_margin: order.profit_margin ?? 0,
     created_at: '', updated_at: '',
   } as Order
+  const { customers: _c, suppliers: _s, quotes: _q, payments: _p, expenses: _e, ...rest } =
+    order as Order & { customers?: unknown; suppliers?: unknown; quotes?: unknown; payments?: unknown; expenses?: unknown }
+  const isUpdate = !!rest.id
+  const num = (v: number | undefined) => v === undefined ? undefined : Number(v)
+  // Undefined fields are omitted, so partial updates never overwrite
+  // untouched columns; DB defaults cover omitted columns on insert.
   const payload: Record<string, unknown> = {
-    order_number: order.order_number,
-    customer_id: order.customer_id || null,
-    supplier_id: order.supplier_id || null,
-    quote_id: order.quote_id || null,
-    jewelry_type: order.jewelry_type || null,
-    description: order.description || null,
-    diamond_type: order.diamond_type || null,
-    diamond_origin: order.diamond_origin || null,
-    diamond_certificate: order.diamond_certificate || null,
-    gold_type: order.gold_type || null,
-    gold_color: order.gold_color || null,
-    size: order.size || null,
-    engraving: order.engraving || null,
-    order_status: order.order_status || 'מחכה למקדמה',
-    production_status: order.production_status || null,
-    sale_price: Number(order.sale_price ?? 0),
-    deposit_amount: Number(order.deposit_amount ?? 0),
-    balance_due: Number(order.balance_due ?? 0),
-    total_cost: Number(order.total_cost ?? 0),
-    net_profit: Number(order.net_profit ?? 0),
-    profit_margin: Number(order.profit_margin ?? 0),
-    payment_status: order.payment_status || 'לא שולם',
-    delivery_date: order.delivery_date || null,
-    notes: order.notes || null,
+    order_number: rest.order_number,
+    customer_id: rest.customer_id !== undefined ? rest.customer_id || null : undefined,
+    supplier_id: rest.supplier_id !== undefined ? rest.supplier_id || null : undefined,
+    quote_id: rest.quote_id !== undefined ? rest.quote_id || null : undefined,
+    jewelry_type: rest.jewelry_type !== undefined ? rest.jewelry_type || null : undefined,
+    description: rest.description !== undefined ? rest.description || null : undefined,
+    diamond_type: rest.diamond_type !== undefined ? rest.diamond_type || null : undefined,
+    diamond_origin: rest.diamond_origin !== undefined ? rest.diamond_origin || null : undefined,
+    diamond_certificate: rest.diamond_certificate !== undefined ? rest.diamond_certificate || null : undefined,
+    gold_type: rest.gold_type !== undefined ? rest.gold_type || null : undefined,
+    gold_color: rest.gold_color !== undefined ? rest.gold_color || null : undefined,
+    size: rest.size !== undefined ? rest.size || null : undefined,
+    engraving: rest.engraving !== undefined ? rest.engraving || null : undefined,
+    order_status: rest.order_status || (isUpdate ? undefined : 'מחכה למקדמה'),
+    production_status: rest.production_status !== undefined ? rest.production_status || null : undefined,
+    sale_price: num(rest.sale_price),
+    deposit_amount: num(rest.deposit_amount),
+    balance_due: num(rest.balance_due),
+    total_cost: num(rest.total_cost),
+    net_profit: num(rest.net_profit),
+    profit_margin: num(rest.profit_margin),
+    payment_status: rest.payment_status || (isUpdate ? undefined : 'לא שולם'),
+    delivery_date: rest.delivery_date !== undefined ? rest.delivery_date || null : undefined,
+    notes: rest.notes !== undefined ? rest.notes || null : undefined,
   }
-  if (order.id) payload.id = order.id
-  if (order.lead_id !== undefined) payload.lead_id = order.lead_id || null
-  if (order.carat !== undefined) payload.carat = Number(order.carat)
-  if (order.production_notes !== undefined) payload.production_notes = order.production_notes || null
+  Object.keys(payload).forEach(k => payload[k] === undefined && delete payload[k])
+  if (rest.id) payload.id = rest.id
+  if (rest.lead_id !== undefined) payload.lead_id = rest.lead_id || null
+  if (rest.carat !== undefined) payload.carat = Number(rest.carat)
+  if (rest.production_notes !== undefined) payload.production_notes = rest.production_notes || null
   const { data, error } = await supabase.from('orders').upsert(payload).select().single()
   if (error) { logSupabaseError('upsertOrder', error); throw error }
   return data as Order
@@ -555,16 +566,33 @@ export async function getPayments(): Promise<Payment[]> {
   return data as Payment[]
 }
 
+// Strips relation objects and coerces empty-string ids to null so payloads
+// are always valid for PostgREST, no matter which form produced them.
+function paymentPayload(payment: Partial<Payment>): Record<string, unknown> {
+  const payload: Record<string, unknown> = {
+    order_id: payment.order_id || null,
+    customer_id: payment.customer_id || null,
+    payment_type: payment.payment_type || null,
+    payment_method: payment.payment_method || null,
+    amount: Number(payment.amount ?? 0),
+    payment_date: payment.payment_date || new Date().toISOString().split('T')[0],
+    is_paid: payment.is_paid ?? true,
+    notes: payment.notes || null,
+  }
+  if (payment.id) payload.id = payment.id
+  return payload
+}
+
 export async function insertPayment(payment: Partial<Payment>): Promise<Payment> {
-  if (IS_DEMO) return { ...payment, id: crypto.randomUUID(), amount: 0, payment_date: new Date().toISOString().split('T')[0], is_paid: true, created_at: '' } as Payment
-  const { data, error } = await supabase.from('payments').insert(payment).select().single()
+  if (IS_DEMO) return { amount: 0, payment_date: new Date().toISOString().split('T')[0], is_paid: true, ...payment, id: crypto.randomUUID(), created_at: '' } as Payment
+  const { data, error } = await supabase.from('payments').insert(paymentPayload(payment)).select().single()
   if (error) { logSupabaseError('insertPayment', error); throw error }
   return data as Payment
 }
 
 export async function upsertPayment(payment: Partial<Payment>): Promise<Payment> {
   if (IS_DEMO) return { ...payment, id: payment.id || crypto.randomUUID(), amount: payment.amount ?? 0, payment_date: payment.payment_date || new Date().toISOString().split('T')[0], is_paid: payment.is_paid ?? true, created_at: '' } as Payment
-  const { data, error } = await supabase.from('payments').upsert(payment).select().single()
+  const { data, error } = await supabase.from('payments').upsert(paymentPayload(payment)).select().single()
   if (error) { logSupabaseError('upsertPayment', error); throw error }
   return data as Payment
 }
@@ -573,6 +601,62 @@ export async function deletePayment(id: string): Promise<void> {
   if (IS_DEMO) return
   const { error } = await supabase.from('payments').delete().eq('id', id)
   if (error) { logSupabaseError('deletePayment', error); throw error }
+}
+
+// ─── Payment → order state automation ────────────────────────────────────────
+
+/**
+ * Single source of truth for an order's payment state. Derives balance_due
+ * and payment_status from the actual payments, auto-advances the order from
+ * "מחכה למקדמה" to "מקדמה התקבלה" once money arrives, persists the result,
+ * and refreshes the customer's aggregate stats in the background.
+ */
+export async function syncOrderPaymentState(order: Order, payments: Payment[]): Promise<Order> {
+  const paid = payments.filter(p => p.is_paid)
+  const totalPaid = paid.reduce((s, p) => s + p.amount, 0)
+  const balance_due = Math.max(0, order.sale_price - totalPaid)
+
+  let payment_status: string
+  if (totalPaid <= 0) payment_status = 'לא שולם'
+  else if (balance_due === 0) payment_status = 'שולם במלואו'
+  else if (paid.every(p => p.payment_type === 'מקדמה')) payment_status = 'שולמה מקדמה'
+  else payment_status = 'שולם חלקית'
+
+  const updates: Partial<Order> = { id: order.id, balance_due, payment_status }
+  if (order.order_status === 'מחכה למקדמה' && totalPaid > 0) {
+    updates.order_status = 'מקדמה התקבלה'
+  }
+
+  const updated = await upsertOrder(updates)
+  if (order.customer_id) refreshCustomerStats(order.customer_id).catch(() => {})
+  return { ...order, ...updated, payments }
+}
+
+/** Records a customer payment against an order and syncs the order's state. */
+export async function recordOrderPayment(
+  order: Order,
+  payment: Partial<Payment>,
+): Promise<{ payment: Payment; order: Order }> {
+  const saved = await insertPayment({
+    order_id: order.id,
+    customer_id: order.customer_id,
+    is_paid: true,
+    payment_date: new Date().toISOString().split('T')[0],
+    ...payment,
+  })
+  const nextPayments = [...(order.payments ?? []), saved]
+  const synced = await syncOrderPaymentState(order, nextPayments)
+  return { payment: saved, order: synced }
+}
+
+/** Re-syncs an order's payment state from the database (e.g. after edits made outside the order page). */
+export async function syncOrderPaymentStateById(orderId: string): Promise<Order | null> {
+  try {
+    const order = await getOrder(orderId)
+    return await syncOrderPaymentState(order, order.payments ?? [])
+  } catch {
+    return null
+  }
 }
 
 // ─── Expenses ────────────────────────────────────────────────────────────────
@@ -587,15 +671,7 @@ export async function getExpenses(): Promise<Expense[]> {
   return data as Expense[]
 }
 
-export async function insertExpense(expense: Partial<Expense>): Promise<Expense> {
-  if (IS_DEMO) return { ...expense, id: crypto.randomUUID(), amount: 0, expense_date: new Date().toISOString().split('T')[0], is_paid: true, created_at: '' } as Expense
-  const { data, error } = await supabase.from('expenses').insert(expense).select().single()
-  if (error) { logSupabaseError('insertExpense', error); throw error }
-  return data as Expense
-}
-
-export async function upsertExpense(expense: Partial<Expense>): Promise<Expense> {
-  if (IS_DEMO) return { ...expense, id: expense.id || crypto.randomUUID(), amount: expense.amount ?? 0, expense_date: expense.expense_date || new Date().toISOString().split('T')[0], is_paid: expense.is_paid ?? false, created_at: '' } as Expense
+function expensePayload(expense: Partial<Expense>): Record<string, unknown> {
   const payload: Record<string, unknown> = {
     order_id: expense.order_id || null,
     supplier_id: expense.supplier_id || null,
@@ -606,7 +682,19 @@ export async function upsertExpense(expense: Partial<Expense>): Promise<Expense>
     notes: expense.notes || null,
   }
   if (expense.id) payload.id = expense.id
-  const { data, error } = await supabase.from('expenses').upsert(payload).select().single()
+  return payload
+}
+
+export async function insertExpense(expense: Partial<Expense>): Promise<Expense> {
+  if (IS_DEMO) return { amount: 0, expense_date: new Date().toISOString().split('T')[0], is_paid: true, ...expense, id: crypto.randomUUID(), created_at: '' } as Expense
+  const { data, error } = await supabase.from('expenses').insert(expensePayload(expense)).select().single()
+  if (error) { logSupabaseError('insertExpense', error); throw error }
+  return data as Expense
+}
+
+export async function upsertExpense(expense: Partial<Expense>): Promise<Expense> {
+  if (IS_DEMO) return { ...expense, id: expense.id || crypto.randomUUID(), amount: expense.amount ?? 0, expense_date: expense.expense_date || new Date().toISOString().split('T')[0], is_paid: expense.is_paid ?? false, created_at: '' } as Expense
+  const { data, error } = await supabase.from('expenses').upsert(expensePayload(expense)).select().single()
   if (error) { logSupabaseError('upsertExpense', error); throw error }
   return data as Expense
 }
@@ -724,25 +812,6 @@ export async function getCustomerFull(id: string): Promise<Customer> {
   }
 }
 
-// ─── Tasks ────────────────────────────────────────────────────────────────────
-
-export async function getTasks(): Promise<Task[]> {
-  if (IS_DEMO) return []
-  const { data, error } = await supabase
-    .from('tasks')
-    .select('*')
-    .order('due_date', { ascending: true })
-  if (error) { logSupabaseError('getTasks', error); throw error }
-  return data as Task[]
-}
-
-export async function upsertTask(task: Partial<Task>): Promise<Task> {
-  if (IS_DEMO) return { ...task, id: task.id || crypto.randomUUID(), status: task.status || 'פתוח', priority: task.priority || 'בינוני', title: task.title || '', created_at: '' } as Task
-  const { data, error } = await supabase.from('tasks').upsert(task).select().single()
-  if (error) { logSupabaseError('upsertTask', error); throw error }
-  return data as Task
-}
-
 // ─── Customer stats refresh ───────────────────────────────────────────────────
 
 export async function refreshCustomerStats(customerId: string): Promise<Customer> {
@@ -795,32 +864,3 @@ export async function refreshCustomerStats(customerId: string): Promise<Customer
   return data as Customer
 }
 
-// ─── Dashboard metrics ───────────────────────────────────────────────────────
-
-export async function getDashboardMetrics(): Promise<DashboardMetrics> {
-  const [payments, expenses, leads, quotes, orders] = await Promise.all([
-    getPayments(), getExpenses(), getLeads(), getQuotes(), getOrders(),
-  ])
-  const now = new Date()
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
-  const twoWeeksAhead = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000)
-  const monthlyRevenue = payments.filter(p => p.is_paid && new Date(p.payment_date) >= monthStart).reduce((s, p) => s + p.amount, 0)
-  const monthlyExpenses = expenses.filter(e => e.is_paid && new Date(e.expense_date) >= monthStart).reduce((s, e) => s + e.amount, 0)
-  const unpaidBalance = orders.filter(o => o.payment_status !== 'שולם במלואו').reduce((s, o) => s + o.balance_due, 0)
-  const upcomingDeliveries = orders.filter(o => {
-    if (!o.delivery_date || ['הושלם', 'בוטל'].includes(o.order_status)) return false
-    const d = new Date(o.delivery_date)
-    return d >= now && d <= twoWeeksAhead
-  }).length
-  return {
-    monthlyRevenue, monthlyExpenses, monthlyProfit: monthlyRevenue - monthlyExpenses,
-    openOrders: orders.filter(o => !['הושלם', 'בוטל'].includes(o.order_status)).length,
-    openQuotes: quotes.filter(q => !['אושרה', 'נדחתה', 'פג תוקף'].includes(q.quote_status)).length,
-    activeLeads: leads.filter(l => !['נסגר להזמנה', 'לא רלוונטי'].includes(l.lead_status)).length,
-    waitingForDetails: leads.filter(l => l.lead_status === 'מחכה לפרטים').length,
-    unpaidBalance, upcomingDeliveries,
-    realCustomers: 0, repeatCustomers: 0,
-    waitingForDeposit: orders.filter(o => o.order_status === 'מחכה למקדמה').length,
-    inProduction: orders.filter(o => o.order_status === 'בייצור' || o.order_status === 'הועבר לייצור').length,
-  }
-}

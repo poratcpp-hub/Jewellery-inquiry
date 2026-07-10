@@ -84,20 +84,23 @@ export function calculateOrderFinancials(order: {
   return { balance_due, net_profit, profit_margin }
 }
 
-export function generateQuoteNumber(): string {
+// Collision-resistant document numbers: yymm prefix for readability plus a
+// millisecond-timestamp suffix in base 36 (a 3-digit random suffix collides
+// after a few hundred documents).
+function generateDocumentNumber(prefix: string): string {
   const date = new Date()
   const year = date.getFullYear().toString().slice(-2)
   const month = String(date.getMonth() + 1).padStart(2, '0')
-  const random = Math.floor(Math.random() * 900 + 100)
-  return `Q${year}${month}-${random}`
+  const stamp = Date.now().toString(36).slice(-6).toUpperCase()
+  return `${prefix}${year}${month}-${stamp}`
+}
+
+export function generateQuoteNumber(): string {
+  return generateDocumentNumber('Q')
 }
 
 export function generateOrderNumber(): string {
-  const date = new Date()
-  const year = date.getFullYear().toString().slice(-2)
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const random = Math.floor(Math.random() * 900 + 100)
-  return `O${year}${month}-${random}`
+  return generateDocumentNumber('O')
 }
 
 export function isOverdue(dateStr: string | undefined | null): boolean {

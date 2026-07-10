@@ -13,7 +13,7 @@ import { FormField, FormGrid, FormSection } from '@/components/ui/form-field'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { TableSkeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
-import { useUnsavedChanges } from '@/lib/hooks'
+import { useUnsavedChanges, useResetOnOpen } from '@/lib/hooks'
 import { isValidIsraeliMobilePhone, normalizeIsraeliPhone, PHONE_ERROR } from '@/lib/validation'
 import { getSuppliers, upsertSupplier, deleteSupplier } from '@/lib/data'
 import { SUPPLIER_CATEGORIES } from '@/lib/constants'
@@ -49,11 +49,9 @@ function SupplierForm({ open, onClose, supplier, onSave }: {
 }) {
   const [form, setForm] = useState<Partial<Supplier>>(supplier || {})
   const [errors, setErrors] = useState<Record<string, string>>({})
-  const { isDirtyRef, confirmClose, setConfirmClose, markDirty, markClean, tryClose, confirmAndClose } = useUnsavedChanges(open)
+  const { isDirtyRef, confirmClose, setConfirmClose, markDirty, tryClose, confirmAndClose } = useUnsavedChanges(open)
 
-  useEffect(() => {
-    if (open) { setForm(supplier || {}); setErrors({}); markClean() }
-  }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
+  useResetOnOpen(open, () => { setForm(supplier || {}); setErrors({}) })
 
   const set = (k: keyof Supplier, v: string | number) => {
     setForm(f => ({ ...f, [k]: v }))

@@ -17,7 +17,8 @@ import { MetricCard } from '@/components/dashboard/metric-card'
 import { TableSkeleton, MetricsSkeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
 import { formatCurrency, formatDate } from '@/lib/utils'
-import { getPayments, insertPayment, upsertPayment, deletePayment, getExpenses, insertExpense, upsertExpense, deleteExpense, getOrders, getCustomers, getSuppliers } from '@/lib/data'
+import { useResetOnOpen } from '@/lib/hooks'
+import { getPayments, insertPayment, upsertPayment, deletePayment, getExpenses, insertExpense, upsertExpense, deleteExpense, getOrders, getCustomers, getSuppliers, syncOrderPaymentStateById } from '@/lib/data'
 import { PAYMENT_TYPES, PAYMENT_METHODS, EXPENSE_TYPES } from '@/lib/constants'
 import type { Payment, Expense, Order, Customer, Supplier } from '@/lib/types'
 import { Plus, TrendingUp, TrendingDown, DollarSign, PiggyBank, Pencil, Trash2 } from 'lucide-react'
@@ -37,9 +38,7 @@ function PaymentForm({ open, onClose, orders, customers, payments, payment, onSa
   const [form, setForm] = useState<Partial<Payment>>(defaults())
   const [error, setError] = useState('')
 
-  useEffect(() => {
-    if (open) { setForm(defaults()); setError('') }
-  }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
+  useResetOnOpen(open, () => { setForm(defaults()); setError('') })
 
   const set = (k: keyof Payment, v: string | number | boolean) => {
     setForm(f => ({ ...f, [k]: v })); setError('')
@@ -141,9 +140,7 @@ function ExpenseForm({ open, onClose, orders, suppliers, expenses, expense, onSa
   const [form, setForm] = useState<Partial<Expense>>(defaults())
   const [error, setError] = useState('')
 
-  useEffect(() => {
-    if (open) { setForm(defaults()); setError('') }
-  }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
+  useResetOnOpen(open, () => { setForm(defaults()); setError('') })
 
   const set = (k: keyof Expense, v: string | number | boolean) => {
     setForm(f => ({ ...f, [k]: v })); setError('')
@@ -268,34 +265,49 @@ export default function FinancialsPage() {
 
   // ── Payment handlers ────────────────────────────────────────────────────────
 
+  // Payments recorded against an order must also update that order's
+  // balance/payment status — otherwise the order page shows stale numbers.
+  const syncLinkedOrder = useCallback(async (...orderIds: (string | undefined)[]) => {
+    const ids = [...new Set(orderIds.filter((id): id is string => !!id))]
+    for (const orderId of ids) {
+      const synced = await syncOrderPaymentStateById(orderId)
+      if (synced) {
+        setOrders(prev => prev.map(o => o.id === orderId ? { ...o, ...synced, customers: o.customers } : o))
+      }
+    }
+  }, [])
+
   const handleSavePayment = useCallback(async (data: Partial<Payment>) => {
     try {
       if (editingPayment) {
         const saved = await upsertPayment({ ...editingPayment, ...data })
         setPayments(prev => prev.map(p => p.id === saved.id ? enrichPayment(saved) : p))
+        await syncLinkedOrder(editingPayment.order_id, saved.order_id)
         toast({ type: 'success', title: 'תשלום עודכן' })
       } else {
         const saved = await insertPayment(data)
         setPayments(prev => [enrichPayment(saved), ...prev])
+        await syncLinkedOrder(saved.order_id)
         toast({ type: 'success', title: 'תשלום נוסף' })
       }
     } catch {
       toast({ type: 'error', title: 'שגיאה בשמירת התשלום' })
     }
     setEditingPayment(undefined)
-  }, [editingPayment, enrichPayment, toast])
+  }, [editingPayment, enrichPayment, syncLinkedOrder, toast])
 
   const handleDeletePayment = useCallback(async () => {
     if (!deletePaymentTarget) return
     try {
       await deletePayment(deletePaymentTarget.id)
       setPayments(prev => prev.filter(p => p.id !== deletePaymentTarget.id))
+      await syncLinkedOrder(deletePaymentTarget.order_id)
       toast({ type: 'success', title: 'תשלום נמחק' })
     } catch {
       toast({ type: 'error', title: 'שגיאה במחיקת התשלום' })
     }
     setDeletePaymentTarget(undefined)
-  }, [deletePaymentTarget, toast])
+  }, [deletePaymentTarget, syncLinkedOrder, toast])
 
   // ── Expense handlers ────────────────────────────────────────────────────────
 

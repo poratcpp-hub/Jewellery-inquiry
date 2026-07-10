@@ -14,7 +14,7 @@ import { TableSkeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
 import { useDebounce, useTableSort } from '@/lib/hooks'
 import { formatCurrency, formatDate, getProfitColor, exportCsv } from '@/lib/utils'
-import { getQuotes, upsertQuote, deleteQuote, getCustomers } from '@/lib/data'
+import { getQuotes, upsertQuote, deleteQuote, getCustomers, autoExpireQuotes, changeQuoteStatus } from '@/lib/data'
 import { QUOTE_STATUSES } from '@/lib/constants'
 import { InlineStatusSelect } from '@/components/ui/inline-status-select'
 import type { Quote, Customer } from '@/lib/types'
@@ -35,9 +35,10 @@ export default function QuotesPage() {
 
   useEffect(() => {
     Promise.all([getQuotes(), getCustomers()])
-      .then(([q, c]) => {
+      .then(async ([q, c]) => {
+        const fresh = await autoExpireQuotes(q)
         const custMap = Object.fromEntries(c.map(x => [x.id, x]))
-        setQuotes(q.map(quote => ({ ...quote, customers: custMap[quote.customer_id || ''] || quote.customers })))
+        setQuotes(fresh.map(quote => ({ ...quote, customers: custMap[quote.customer_id || ''] || quote.customers })))
         setCustomers(c)
       })
       .catch(() => toast({ type: 'error', title: 'שגיאה בטעינת הנתונים' }))
@@ -79,8 +80,11 @@ export default function QuotesPage() {
 
   const handleStatusChange = useCallback(async (quote: Quote, newStatus: string) => {
     try {
-      await upsertQuote({ id: quote.id, quote_status: newStatus, quote_number: quote.quote_number, diamond_cost: quote.diamond_cost, gold_cost: quote.gold_cost, labor_cost: quote.labor_cost, setting_cost: quote.setting_cost, packaging_cost: quote.packaging_cost, shipping_cost: quote.shipping_cost, other_cost: quote.other_cost, total_cost: quote.total_cost, sale_price: quote.sale_price, expected_profit: quote.expected_profit, profit_margin: quote.profit_margin })
+      await changeQuoteStatus(quote, newStatus)
       setQuotes(prev => prev.map(q => q.id === quote.id ? { ...q, quote_status: newStatus } : q))
+      if (newStatus === 'נשלחה ללקוח' && quote.lead_id) {
+        toast({ type: 'info', title: 'הליד עודכן', description: 'נקבע מעקב אוטומטי בעוד 3 ימים' })
+      }
     } catch {
       toast({ type: 'error', title: 'שגיאה בעדכון סטטוס' })
     }

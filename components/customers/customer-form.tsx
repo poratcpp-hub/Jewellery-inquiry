@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Dialog, DialogHeader, DialogBody, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -10,7 +10,7 @@ import { FormField, FormGrid, FormSection } from '@/components/ui/form-field'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { CUSTOMER_STATUSES, SOURCES } from '@/lib/constants'
 import { isValidIsraeliMobilePhone, isValidEmail, normalizeIsraeliPhone, PHONE_ERROR, EMAIL_ERROR } from '@/lib/validation'
-import { useUnsavedChanges } from '@/lib/hooks'
+import { useUnsavedChanges, useResetOnOpen } from '@/lib/hooks'
 import type { Customer } from '@/lib/types'
 
 interface CustomerFormProps {
@@ -25,15 +25,12 @@ const DEFAULTS: Partial<Customer> = { customer_status: 'לקוח פוטנציא�
 export function CustomerForm({ open, onClose, customer, onSave }: CustomerFormProps) {
   const [form, setForm] = useState<Partial<Customer>>(customer || DEFAULTS)
   const [errors, setErrors] = useState<Record<string, string>>({})
-  const { isDirtyRef, confirmClose, setConfirmClose, markDirty, markClean, tryClose, confirmAndClose } = useUnsavedChanges(open)
+  const { isDirtyRef, confirmClose, setConfirmClose, markDirty, tryClose, confirmAndClose } = useUnsavedChanges(open)
 
-  useEffect(() => {
-    if (open) {
-      setForm(customer || DEFAULTS)
-      setErrors({})
-      markClean()
-    }
-  }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
+  useResetOnOpen(open, () => {
+    setForm(customer || DEFAULTS)
+    setErrors({})
+  })
 
   const set = (key: keyof Customer, value: string) => {
     setForm(f => ({ ...f, [key]: value }))

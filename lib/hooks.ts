@@ -4,15 +4,17 @@ export function useUnsavedChanges(isOpen: boolean) {
   const isDirtyRef = useRef(false)
   const [confirmClose, setConfirmClose] = useState(false)
 
-  useEffect(() => {
-    if (isOpen) {
-      isDirtyRef.current = false
-      setConfirmClose(false)
-    }
-  }, [isOpen])
+  // Reset the pending-confirmation flag whenever the dialog (re)opens —
+  // adjusted during render instead of in an effect to avoid a cascading render.
+  const [prevOpen, setPrevOpen] = useState(isOpen)
+  if (isOpen !== prevOpen) {
+    setPrevOpen(isOpen)
+    if (isOpen) setConfirmClose(false)
+  }
 
   useEffect(() => {
     if (!isOpen) return
+    isDirtyRef.current = false
     const handler = (e: BeforeUnloadEvent) => {
       if (isDirtyRef.current) {
         e.preventDefault()
@@ -41,6 +43,19 @@ export function useUnsavedChanges(isOpen: boolean) {
   }, [])
 
   return { isDirtyRef, confirmClose, setConfirmClose, markDirty, markClean, tryClose, confirmAndClose }
+}
+
+/**
+ * Runs `reset` when `open` flips to true — during render rather than in an
+ * effect, so the dialog never paints a stale frame before resetting.
+ * Shared by every form dialog in the app.
+ */
+export function useResetOnOpen(open: boolean, reset: () => void) {
+  const [prevOpen, setPrevOpen] = useState(open)
+  if (open !== prevOpen) {
+    setPrevOpen(open)
+    if (open) reset()
+  }
 }
 
 export function useDebounce<T extends (...args: Parameters<T>) => void>(

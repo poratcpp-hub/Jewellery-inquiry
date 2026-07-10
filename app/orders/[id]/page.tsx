@@ -11,7 +11,7 @@ import { Badge, getStatusBadgeVariant } from '@/components/ui/badge'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { useToast } from '@/components/ui/toast'
 import { formatCurrency, formatDate, daysUntil, getProfitColor } from '@/lib/utils'
-import { getOrder, upsertOrder, insertPayment, upsertPayment, deletePayment, upsertExpense, deleteExpense } from '@/lib/data'
+import { getOrder, upsertOrder, recordOrderPayment, syncOrderPaymentState, upsertPayment, deletePayment, upsertExpense, deleteExpense } from '@/lib/data'
 import { PRODUCTION_STATUSES, ORDER_STATUSES, PAYMENT_TYPES, PAYMENT_METHODS, EXPENSE_TYPES } from '@/lib/constants'
 import type { Order, Payment, Expense } from '@/lib/types'
 import { ArrowRight, ExternalLink, Plus, CheckCircle, Circle, Calendar, AlertTriangle, Pencil, Trash2, X, Check } from 'lucide-react'
@@ -95,26 +95,13 @@ export default function OrderDetailPage() {
     setAddingPayment(true)
     try {
       const amount = Number(paymentForm.amount)
-      const newPayment = await insertPayment({
-        order_id: order.id,
-        customer_id: order.customer_id,
+      const { order: synced } = await recordOrderPayment(order, {
         payment_type: paymentForm.payment_type,
         payment_method: paymentForm.payment_method,
         amount,
-        payment_date: new Date().toISOString().split('T')[0],
-        is_paid: true,
         notes: paymentForm.notes,
       })
-      const totalPaid = (order.payments || []).filter(p => p.is_paid).reduce((s, p) => s + p.amount, 0) + amount
-      const newBalance = Math.max(0, order.sale_price - totalPaid)
-      const newPaymentStatus = newBalance === 0 ? 'שולם במלואו' : totalPaid > 0 ? 'שולם חלקית' : 'לא שולם'
-      const updated = await upsertOrder({ ...order, balance_due: newBalance, payment_status: newPaymentStatus })
-      setOrder(o => o ? {
-        ...o,
-        balance_due: updated.balance_due,
-        payment_status: updated.payment_status,
-        payments: [...(o.payments || []), newPayment],
-      } : o)
+      setOrder(synced)
       setPaymentForm({ amount: '', payment_type: 'יתרה', payment_method: 'העברה בנקאית', notes: '' })
       toast({ type: 'success', title: `תשלום של ${formatCurrency(amount)} נרשם` })
     } catch {
@@ -131,11 +118,8 @@ export default function OrderDetailPage() {
 
   const recalcAndSavePayments = useCallback(async (newPayments: Payment[]) => {
     if (!order) return
-    const totalPaid = newPayments.filter(p => p.is_paid).reduce((s, p) => s + p.amount, 0)
-    const newBalance = Math.max(0, order.sale_price - totalPaid)
-    const newPaymentStatus = newBalance === 0 ? 'שולם במלואו' : totalPaid > 0 ? 'שולם חלקית' : 'לא שולם'
-    await upsertOrder({ ...order, balance_due: newBalance, payment_status: newPaymentStatus })
-    setOrder(o => o ? { ...o, payments: newPayments, balance_due: newBalance, payment_status: newPaymentStatus } : o)
+    const synced = await syncOrderPaymentState(order, newPayments)
+    setOrder(synced)
   }, [order])
 
   const handleSaveEditPayment = useCallback(async (paymentId: string) => {

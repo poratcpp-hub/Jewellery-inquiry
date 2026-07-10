@@ -1,12 +1,12 @@
 import { createClient } from './supabase/client'
 
-if (typeof window !== 'undefined') {
+// Surface Supabase misconfiguration early in the browser console.
+// Success paths stay silent — only real problems are reported.
+if (typeof window !== 'undefined' && process.env.NEXT_PUBLIC_DEMO_MODE !== 'true') {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
   if (!url || url === 'https://placeholder.supabase.co') {
     console.error('[Supabase] ❌ NEXT_PUBLIC_SUPABASE_URL is missing or is placeholder')
-  } else {
-    console.log('[Supabase] URL:', url)
   }
   if (!key || key === 'placeholder-key') {
     console.error('[Supabase] ❌ NEXT_PUBLIC_SUPABASE_ANON_KEY is missing or is placeholder')
@@ -18,11 +18,7 @@ if (typeof window !== 'undefined') {
       '  and set it as NEXT_PUBLIC_SUPABASE_ANON_KEY in your .env.local\n' +
       '  (or Vercel environment variables for deployed instances)'
     )
-  } else if (key.startsWith('eyJ')) {
-    console.log('[Supabase] Key type: JWT anon — no host restrictions ✅')
   }
-  // Version marker — if you see this line, the cache-bust build is running
-  console.log('[Supabase] data layer v2 — no embedded joins ✅')
 }
 
 export const supabase = createClient()
