@@ -1,5 +1,5 @@
 import { formatCurrency, formatDate } from './utils'
-import type { Lead, Quote } from './types'
+import type { Lead, Quote, Payment, Expense } from './types'
 
 export function detectJewelryType(message: string): string | null {
   const m = message.toLowerCase()
@@ -91,6 +91,74 @@ export function generateMissingDetailsMessage(lead: Partial<Lead>): string {
   }
 
   return templates[lead.jewelry_type ?? ''] ?? `היי ${firstName} 😊\nתודה שפנית!\nכדי שאוכל להכין הצעת מחיר, אשמח לדעת:\n\n${bullets}\n\nתודה! 💎`
+}
+
+/**
+ * Pure decision engine for an order's payment state. Given the sale price,
+ * the current order status, and the payments actually recorded, returns the
+ * derived balance, payment status, and — when a milestone is reached — the
+ * next order status:
+ *   - first money in while waiting for a deposit  → «מקדמה התקבלה»
+ *   - fully paid while waiting for the balance    → «הושלם»
+ */
+export function deriveOrderPaymentState(
+  salePrice: number,
+  orderStatus: string,
+  payments: Pick<Payment, 'amount' | 'is_paid' | 'payment_type'>[],
+): { balance_due: number; payment_status: string; next_order_status?: string } {
+  const paid = payments.filter(p => p.is_paid)
+  const totalPaid = paid.reduce((s, p) => s + p.amount, 0)
+  const balance_due = Math.max(0, salePrice - totalPaid)
+
+  let payment_status: string
+  if (totalPaid <= 0) payment_status = 'לא שולם'
+  else if (balance_due === 0) payment_status = 'שולם במלואו'
+  else if (paid.every(p => p.payment_type === 'מקדמה')) payment_status = 'שולמה מקדמה'
+  else payment_status = 'שולם חלקית'
+
+  let next_order_status: string | undefined
+  if (orderStatus === 'מחכה למקדמה' && totalPaid > 0) {
+    next_order_status = 'מקדמה התקבלה'
+  } else if (orderStatus === 'מחכה לתשלום יתרה' && totalPaid > 0 && balance_due === 0) {
+    next_order_status = 'הושלם'
+  }
+
+  return { balance_due, payment_status, next_order_status }
+}
+
+const QUOTE_COST_TO_EXPENSE_TYPE = [
+  ['diamond_cost', 'יהלום'],
+  ['gold_cost', 'זהב'],
+  ['labor_cost', 'עבודת ייצור'],
+  ['setting_cost', 'שיבוץ'],
+  ['packaging_cost', 'אריזה'],
+  ['shipping_cost', 'משלוח'],
+  ['other_cost', 'אחר'],
+] as const
+
+/**
+ * Translates a quote's cost breakdown into planned (unpaid) expense line
+ * items, so converting a quote to an order books the expected supplier
+ * costs automatically.
+ */
+export function expenseItemsFromQuote(quote: Partial<Quote>): Pick<Expense, 'expense_type' | 'amount'>[] {
+  return QUOTE_COST_TO_EXPENSE_TYPE
+    .filter(([key]) => Number(quote[key] ?? 0) > 0)
+    .map(([key, expense_type]) => ({ expense_type, amount: Number(quote[key]) }))
+}
+
+/**
+ * Production milestones drive the order status: once production is done the
+ * order is ready for delivery (unless it already moved further along).
+ */
+export function deriveOrderStatusFromProduction(
+  orderStatus: string,
+  productionStatus: string,
+): string | undefined {
+  const preDelivery = ['מחכה למקדמה', 'מקדמה התקבלה', 'הועבר לייצור', 'בייצור']
+  if (productionStatus === 'הושלם' && preDelivery.includes(orderStatus)) return 'מוכן למסירה'
+  if (productionStatus !== 'הושלם' && ['מחכה למקדמה', 'מקדמה התקבלה'].includes(orderStatus)) return 'בייצור'
+  return undefined
 }
 
 export function getDealQuality(profitMargin: number): { label: string; color: string } {

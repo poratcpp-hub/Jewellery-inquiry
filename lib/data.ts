@@ -12,6 +12,7 @@ import type {
 } from './types'
 import { normalizeIsraeliPhone } from './validation'
 import { calculateOrderFinancials, generateOrderNumber } from './utils'
+import { deriveOrderPaymentState, deriveOrderStatusFromProduction, expenseItemsFromQuote } from './workflow'
 
 const IS_DEMO =
   process.env.NEXT_PUBLIC_DEMO_MODE === 'true' ||
@@ -334,6 +335,11 @@ export async function createOrderFromLeadOrQuote({
     ...calcs,
   })
 
+  // Book the quote's cost breakdown as planned (unpaid) expenses
+  if (quote) {
+    await createExpensesFromQuote(order, quote).catch(() => {})
+  }
+
   // Link order back to lead
   if (lead) {
     await upsertLead({
@@ -458,11 +464,26 @@ export async function autoExpireQuotes(quotes: Quote[]): Promise<Quote[]> {
 }
 
 /**
- * Changes a quote's status and runs the follow-up automation: when a quote is
- * sent to the customer, the linked lead (if still active) moves to
- * "נשלחה הצעת מחיר" with a follow-up reminder three days out.
+ * Changes a quote's status and runs the pipeline automations:
+ *   - «נשלחה ללקוח» → the linked lead (if still active) moves to
+ *     "נשלחה הצעת מחיר" with a follow-up reminder three days out.
+ *   - «אושרה» → an order is created automatically (idempotent), including
+ *     the customer link and the quote's costs booked as planned expenses.
  */
-export async function changeQuoteStatus(quote: Quote, newStatus: string): Promise<Quote> {
+export async function changeQuoteStatus(
+  quote: Quote,
+  newStatus: string,
+): Promise<{ quote: Quote; order?: Order; orderCreated?: boolean }> {
+  // Approving a quote advances the pipeline by itself: create (or reuse) the order
+  if (newStatus === 'אושרה' && !quote.order_id) {
+    const { order, alreadyExisted } = await createOrderFromLeadOrQuote({ quoteId: quote.id })
+    return {
+      quote: { ...quote, quote_status: 'אושרה', order_id: order.id, customer_id: order.customer_id },
+      order,
+      orderCreated: !alreadyExisted,
+    }
+  }
+
   const updated = await upsertQuote({ id: quote.id, quote_number: quote.quote_number, quote_status: newStatus })
 
   if (newStatus === 'נשלחה ללקוח' && quote.lead_id) {
@@ -480,7 +501,7 @@ export async function changeQuoteStatus(quote: Quote, newStatus: string): Promis
     } catch { /* lead follow-up is best-effort */ }
   }
 
-  return { ...quote, quote_status: updated.quote_status }
+  return { quote: { ...quote, quote_status: updated.quote_status } }
 }
 
 // ─── Orders ──────────────────────────────────────────────────────────────────
@@ -554,6 +575,37 @@ export async function deleteOrder(id: string): Promise<void> {
   if (error) { logSupabaseError('deleteOrder', error); throw error }
 }
 
+/**
+ * Changes an order's status and keeps downstream data in sync: completing or
+ * cancelling an order refreshes the customer's aggregate stats (cancelled
+ * orders drop out of revenue).
+ */
+export async function changeOrderStatus(order: Order, newStatus: string): Promise<Order> {
+  await upsertOrder({ id: order.id, order_status: newStatus })
+  const affectsStats = ['הושלם', 'בוטל'].includes(newStatus) || order.order_status === 'בוטל'
+  if (order.customer_id && affectsStats) {
+    refreshCustomerStats(order.customer_id).catch(() => {})
+  }
+  return { ...order, order_status: newStatus }
+}
+
+/**
+ * Changes an order's production stage and auto-advances the order status:
+ * starting production moves the order to «בייצור», finishing it moves the
+ * order to «מוכן למסירה».
+ */
+export async function changeOrderProductionStatus(order: Order, productionStatus: string): Promise<Order> {
+  const nextOrderStatus = deriveOrderStatusFromProduction(order.order_status, productionStatus)
+  const updates: Partial<Order> = { id: order.id, production_status: productionStatus }
+  if (nextOrderStatus) updates.order_status = nextOrderStatus
+  await upsertOrder(updates)
+  return {
+    ...order,
+    production_status: productionStatus,
+    ...(nextOrderStatus ? { order_status: nextOrderStatus } : {}),
+  }
+}
+
 // ─── Payments ────────────────────────────────────────────────────────────────
 
 export async function getPayments(): Promise<Payment[]> {
@@ -607,29 +659,71 @@ export async function deletePayment(id: string): Promise<void> {
 
 /**
  * Single source of truth for an order's payment state. Derives balance_due
- * and payment_status from the actual payments, auto-advances the order from
- * "מחכה למקדמה" to "מקדמה התקבלה" once money arrives, persists the result,
- * and refreshes the customer's aggregate stats in the background.
+ * and payment_status from the actual payments, auto-advances the order when
+ * a payment milestone is reached (deposit in → "מקדמה התקבלה", fully paid
+ * while waiting for the balance → "הושלם"), persists the result, and
+ * refreshes the customer's aggregate stats in the background.
  */
 export async function syncOrderPaymentState(order: Order, payments: Payment[]): Promise<Order> {
-  const paid = payments.filter(p => p.is_paid)
-  const totalPaid = paid.reduce((s, p) => s + p.amount, 0)
-  const balance_due = Math.max(0, order.sale_price - totalPaid)
-
-  let payment_status: string
-  if (totalPaid <= 0) payment_status = 'לא שולם'
-  else if (balance_due === 0) payment_status = 'שולם במלואו'
-  else if (paid.every(p => p.payment_type === 'מקדמה')) payment_status = 'שולמה מקדמה'
-  else payment_status = 'שולם חלקית'
+  const { balance_due, payment_status, next_order_status } =
+    deriveOrderPaymentState(order.sale_price, order.order_status, payments)
 
   const updates: Partial<Order> = { id: order.id, balance_due, payment_status }
-  if (order.order_status === 'מחכה למקדמה' && totalPaid > 0) {
-    updates.order_status = 'מקדמה התקבלה'
-  }
+  if (next_order_status) updates.order_status = next_order_status
 
-  const updated = await upsertOrder(updates)
+  await upsertOrder(updates)
   if (order.customer_id) refreshCustomerStats(order.customer_id).catch(() => {})
-  return { ...order, ...updated, payments }
+  return {
+    ...order,
+    balance_due,
+    payment_status,
+    ...(next_order_status ? { order_status: next_order_status } : {}),
+    payments,
+  }
+}
+
+/**
+ * Creates a new order and keeps the books in sync automatically: a deposit
+ * entered on the order is recorded as a real payment («מקדמה»), which in turn
+ * drives balance, payment status, and the order-status advance — no manual
+ * entry in the financials page needed.
+ */
+export async function createOrder(order: Partial<Order>): Promise<Order> {
+  const saved = await upsertOrder({ ...order, id: undefined })
+  const deposit = Number(order.deposit_amount ?? 0)
+  if (deposit <= 0) return saved
+
+  const payment = await insertPayment({
+    order_id: saved.id,
+    customer_id: saved.customer_id,
+    payment_type: 'מקדמה',
+    amount: deposit,
+    is_paid: true,
+    notes: 'נרשם אוטומטית עם יצירת ההזמנה',
+  })
+  return syncOrderPaymentState(saved, [payment])
+}
+
+/**
+ * Books the expected supplier costs of a quote as unpaid expense line items
+ * on the order (יהלום / זהב / עבודה / שיבוץ / אריזה / משלוח / אחר), so the
+ * financials page tracks them without manual entry.
+ */
+export async function createExpensesFromQuote(order: Order, quote: Quote): Promise<Expense[]> {
+  const items = expenseItemsFromQuote(quote)
+  if (!items.length) return []
+  const results = await Promise.allSettled(
+    items.map(item => insertExpense({
+      order_id: order.id,
+      expense_type: item.expense_type,
+      amount: item.amount,
+      is_paid: false,
+      notes: `נוצר אוטומטית מהצעת מחיר ${quote.quote_number}`,
+    })),
+  )
+  return results
+    .filter((r): r is PromiseFulfilledResult<Expense> => r.status === 'fulfilled')
+    .map(r => r.value)
 }
 
 /** Records a customer payment against an order and syncs the order's state. */

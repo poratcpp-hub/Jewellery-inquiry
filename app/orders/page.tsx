@@ -13,7 +13,7 @@ import { TableSkeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
 import { useDebounce, useTableSort } from '@/lib/hooks'
 import { formatCurrency, formatDate, daysUntil, exportCsv } from '@/lib/utils'
-import { getOrders, upsertOrder, deleteOrder, getCustomers, getSuppliers, refreshCustomerStats, syncOrderPaymentStateById } from '@/lib/data'
+import { getOrders, upsertOrder, createOrder, changeOrderStatus, deleteOrder, getCustomers, getSuppliers, refreshCustomerStats, syncOrderPaymentStateById } from '@/lib/data'
 import { ORDER_STATUSES, PAYMENT_STATUSES, CLOSED_ORDER_STATUSES } from '@/lib/constants'
 import { InlineStatusSelect } from '@/components/ui/inline-status-select'
 import type { Order, Customer, Supplier } from '@/lib/types'
@@ -76,22 +76,28 @@ export default function OrdersPage() {
 
   const handleSave = useCallback(async (data: Partial<Order>) => {
     try {
-      const saved = await upsertOrder(editing ? { ...editing, ...data } : data)
-      const enriched = enrich(saved)
       if (editing) {
+        const saved = await upsertOrder({ ...editing, ...data })
         // If the sale price changed, re-derive balance/payment status from
         // the payments actually recorded on the order
         const synced = await syncOrderPaymentStateById(saved.id, { onlyIfPayments: true })
-        const next = synced ? enrich({ ...(enriched as Order), ...synced }) : enriched
+        const next = enrich(synced ? { ...saved, ...synced } : saved)
         setOrders(prev => prev.map(o => o.id === editing.id ? next as Order : o))
         toast({ type: 'success', title: 'ההזמנה עודכנה' })
       } else {
-        setOrders(prev => [{ ...enriched, id: enriched.id || Math.random().toString(36).slice(2) } as Order, ...prev])
-        toast({ type: 'success', title: 'הזמנה חדשה נוצרה' })
+        // createOrder books the deposit as a payment and advances the status
+        const saved = await createOrder(data)
+        setOrders(prev => [enrich(saved) as Order, ...prev])
+        const deposit = Number(data.deposit_amount ?? 0)
+        toast({
+          type: 'success',
+          title: 'הזמנה חדשה נוצרה',
+          description: deposit > 0 ? `מקדמה של ${formatCurrency(deposit)} נרשמה אוטומטית בהכנסות` : undefined,
+        })
       }
       // Fire-and-forget: refresh customer stats after save
-      if (saved.customer_id) {
-        refreshCustomerStats(saved.customer_id).catch(() => {})
+      if (data.customer_id) {
+        refreshCustomerStats(data.customer_id).catch(() => {})
       }
     } catch (err) {
       console.error('[handleSave] Error saving order:', err)
@@ -102,8 +108,8 @@ export default function OrdersPage() {
 
   const handleStatusChange = useCallback(async (order: Order, newStatus: string) => {
     try {
-      await upsertOrder({ id: order.id, order_status: newStatus, customer_id: order.customer_id || undefined })
-      setOrders(prev => prev.map(o => o.id === order.id ? { ...o, order_status: newStatus } : o))
+      const updated = await changeOrderStatus(order, newStatus)
+      setOrders(prev => prev.map(o => o.id === order.id ? { ...o, order_status: updated.order_status } : o))
     } catch {
       toast({ type: 'error', title: 'שגיאה בעדכון סטטוס' })
     }

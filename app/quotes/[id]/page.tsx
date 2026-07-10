@@ -54,13 +54,15 @@ export default function QuoteDetailPage() {
   const handleStatusChange = useCallback(async (newStatus: string) => {
     if (!quote) return
     try {
-      await changeQuoteStatus(quote, newStatus)
-      setQuote(q => q ? { ...q, quote_status: newStatus } : q)
+      const result = await changeQuoteStatus(quote, newStatus)
+      setQuote(q => q ? { ...q, ...result.quote, customers: q.customers, leads: q.leads } : q)
       toast({
         type: 'success',
-        title: 'סטטוס עודכן',
-        description: newStatus === 'נשלחה ללקוח' && quote.lead_id
-          ? 'הליד עודכן ונקבע מעקב אוטומטי בעוד 3 ימים' : undefined,
+        title: result.order ? 'ההצעה אושרה — נפתחה הזמנה' : 'סטטוס עודכן',
+        description: result.order
+          ? `הזמנה ${result.order.order_number}${result.orderCreated ? ' נוצרה אוטומטית כולל רישום העלויות בהוצאות' : ' כבר מקושרת'}`
+          : newStatus === 'נשלחה ללקוח' && quote.lead_id
+            ? 'הליד עודכן ונקבע מעקב אוטומטי בעוד 3 ימים' : undefined,
       })
     } catch {
       toast({ type: 'error', title: 'שגיאה בעדכון סטטוס' })

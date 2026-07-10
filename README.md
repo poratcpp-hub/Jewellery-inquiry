@@ -49,8 +49,11 @@ The pipeline maintains itself; these rules run inside `lib/data.ts` so every pag
 
 - **New lead → customer**: creating a lead auto-links it to an existing customer by phone/email, or creates one.
 - **Lead closed → order**: setting a lead to «נסגר להזמנה» auto-creates the order (idempotent — an existing linked order is reused, never duplicated).
-- **Quote → order** (`createOrderFromLeadOrQuote`): one conversion path for both the leads flow and the quotes flow. Copies specs and pricing, links quote + lead + customer, marks the quote approved.
+- **Quote approved → order** (`changeQuoteStatus` / `createOrderFromLeadOrQuote`): marking a quote «אושרה» (or clicking «המר להזמנה») creates the order through one shared path — copies specs and pricing, links quote + lead + customer.
+- **Order created → income booked** (`createOrder`): a deposit entered on a new order is recorded automatically as a «מקדמה» payment in the financials ledger — no manual entry.
+- **Quote costs → expenses booked** (`createExpensesFromQuote`): converting a quote to an order books its cost breakdown (יהלום / זהב / עבודה / שיבוץ / אריזה / משלוח) as planned unpaid expenses on the order.
 - **Quote sent → follow-up** (`changeQuoteStatus`): marking a quote «נשלחה ללקוח» moves the linked lead to «נשלחה הצעת מחיר» and schedules a follow-up reminder 3 days out.
-- **Quote expiry** (`autoExpireQuotes`): sent quotes past their `valid_until` date are marked «פג תוקף» automatically when the quotes page loads.
-- **Payments → order state** (`syncOrderPaymentState`): recording, editing, or deleting a payment — from the order page **or** the financials page — recalculates the order's balance and payment status, advances «מחכה למקדמה» → «מקדמה התקבלה» when money arrives, and refreshes the customer's aggregate stats (revenue, profit, VIP tier).
-- **Customer tiers** (`refreshCustomerStats`): orders count / revenue drive the status automatically (פוטנציאלי → חדש → חוזר → VIP).
+- **Quote expiry** (`autoExpireQuotes`): sent quotes past their `valid_until` date are marked «פג תוקף» automatically when the quotes page or dashboard loads.
+- **Payments → order state** (`syncOrderPaymentState` / `deriveOrderPaymentState`): recording, editing, or deleting a payment — from the order page **or** the financials page — recalculates the order's balance and payment status, advances «מחכה למקדמה» → «מקדמה התקבלה» when money arrives, closes «מחכה לתשלום יתרה» → «הושלם» when fully paid, and refreshes the customer's aggregate stats.
+- **Production → order status** (`changeOrderProductionStatus`): starting production moves the order to «בייצור»; finishing production moves it to «מוכן למסירה».
+- **Customer tiers** (`refreshCustomerStats`): orders count / revenue drive the status automatically (פוטנציאלי → חדש → חוזר → VIP), including when orders complete or are cancelled.

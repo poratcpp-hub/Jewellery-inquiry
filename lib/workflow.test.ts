@@ -7,6 +7,9 @@ import {
   getDealQuality,
   getNextAction,
   generateQuoteMessage,
+  deriveOrderPaymentState,
+  deriveOrderStatusFromProduction,
+  expenseItemsFromQuote,
 } from './workflow'
 import type { Lead } from './types'
 
@@ -87,6 +90,74 @@ describe('generateMissingDetailsMessage', () => {
       jewelry_type: 'טבעת אירוסין', budget: 20000, diamond_type: 'Round',
       carat: 1, desired_style: 'סוליטר', gold_color: 'צהוב',
     })).toBe('')
+  })
+})
+
+describe('deriveOrderPaymentState', () => {
+  const deposit = { amount: 2000, is_paid: true, payment_type: 'מקדמה' }
+  const balance = { amount: 8000, is_paid: true, payment_type: 'יתרה' }
+
+  it('no payments → unpaid, full balance, no advance', () => {
+    expect(deriveOrderPaymentState(10000, 'מחכה למקדמה', [])).toEqual({
+      balance_due: 10000, payment_status: 'לא שולם', next_order_status: undefined,
+    })
+  })
+
+  it('deposit received → «שולמה מקדמה» and the order advances to «מקדמה התקבלה»', () => {
+    expect(deriveOrderPaymentState(10000, 'מחכה למקדמה', [deposit])).toEqual({
+      balance_due: 8000, payment_status: 'שולמה מקדמה', next_order_status: 'מקדמה התקבלה',
+    })
+  })
+
+  it('mixed partial payments → «שולם חלקית» without advancing mid-production', () => {
+    expect(deriveOrderPaymentState(10000, 'בייצור', [deposit, { ...balance, amount: 3000 }])).toEqual({
+      balance_due: 5000, payment_status: 'שולם חלקית', next_order_status: undefined,
+    })
+  })
+
+  it('fully paid while waiting for the balance → order completes automatically', () => {
+    expect(deriveOrderPaymentState(10000, 'מחכה לתשלום יתרה', [deposit, balance])).toEqual({
+      balance_due: 0, payment_status: 'שולם במלואו', next_order_status: 'הושלם',
+    })
+  })
+
+  it('unpaid (pending) payments are excluded from the totals', () => {
+    expect(deriveOrderPaymentState(10000, 'מחכה למקדמה', [{ ...deposit, is_paid: false }])).toEqual({
+      balance_due: 10000, payment_status: 'לא שולם', next_order_status: undefined,
+    })
+  })
+})
+
+describe('deriveOrderStatusFromProduction', () => {
+  it('starting production moves a waiting order to «בייצור»', () => {
+    expect(deriveOrderStatusFromProduction('מקדמה התקבלה', 'הזמנת חומרים')).toBe('בייצור')
+  })
+
+  it('finishing production moves the order to «מוכן למסירה»', () => {
+    expect(deriveOrderStatusFromProduction('בייצור', 'הושלם')).toBe('מוכן למסירה')
+  })
+
+  it('never moves an order backwards', () => {
+    expect(deriveOrderStatusFromProduction('מוכן למסירה', 'הושלם')).toBeUndefined()
+    expect(deriveOrderStatusFromProduction('הושלם', 'ליטוש')).toBeUndefined()
+    expect(deriveOrderStatusFromProduction('בייצור', 'ליטוש')).toBeUndefined()
+  })
+})
+
+describe('expenseItemsFromQuote', () => {
+  it('books only the non-zero cost components with their expense types', () => {
+    expect(expenseItemsFromQuote({
+      diamond_cost: 3000, gold_cost: 1200, labor_cost: 0,
+      setting_cost: 400, packaging_cost: 0, shipping_cost: 0, other_cost: 0,
+    })).toEqual([
+      { expense_type: 'יהלום', amount: 3000 },
+      { expense_type: 'זהב', amount: 1200 },
+      { expense_type: 'שיבוץ', amount: 400 },
+    ])
+  })
+
+  it('returns an empty list for a quote without costs', () => {
+    expect(expenseItemsFromQuote({})).toEqual([])
   })
 })
 

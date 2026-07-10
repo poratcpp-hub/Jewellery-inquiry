@@ -11,7 +11,7 @@ import { Badge, getStatusBadgeVariant } from '@/components/ui/badge'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { useToast } from '@/components/ui/toast'
 import { formatCurrency, formatDate, daysUntil, getProfitColor } from '@/lib/utils'
-import { getOrder, upsertOrder, recordOrderPayment, syncOrderPaymentState, upsertPayment, deletePayment, upsertExpense, deleteExpense } from '@/lib/data'
+import { getOrder, changeOrderStatus, changeOrderProductionStatus, recordOrderPayment, syncOrderPaymentState, upsertPayment, deletePayment, upsertExpense, deleteExpense } from '@/lib/data'
 import { PRODUCTION_STATUSES, ORDER_STATUSES, PAYMENT_TYPES, PAYMENT_METHODS, EXPENSE_TYPES } from '@/lib/constants'
 import type { Order, Payment, Expense } from '@/lib/types'
 import { ArrowRight, ExternalLink, Plus, CheckCircle, Circle, Calendar, AlertTriangle, Pencil, Trash2, X, Check } from 'lucide-react'
@@ -82,9 +82,16 @@ export default function OrderDetailPage() {
   const handleStatusChange = useCallback(async (field: 'order_status' | 'production_status', value: string) => {
     if (!order) return
     try {
-      const updated = await upsertOrder({ ...order, [field]: value })
-      setOrder(o => o ? { ...o, [field]: updated[field] } : o)
-      toast({ type: 'success', title: 'סטטוס עודכן' })
+      const updated = field === 'order_status'
+        ? await changeOrderStatus(order, value)
+        : await changeOrderProductionStatus(order, value)
+      const autoAdvanced = field === 'production_status' && updated.order_status !== order.order_status
+      setOrder(o => o ? { ...o, order_status: updated.order_status, production_status: updated.production_status } : o)
+      toast({
+        type: 'success',
+        title: 'סטטוס עודכן',
+        description: autoAdvanced ? `סטטוס ההזמנה קודם אוטומטית ל"${updated.order_status}"` : undefined,
+      })
     } catch {
       toast({ type: 'error', title: 'שגיאה בעדכון' })
     }

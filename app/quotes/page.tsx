@@ -80,9 +80,15 @@ export default function QuotesPage() {
 
   const handleStatusChange = useCallback(async (quote: Quote, newStatus: string) => {
     try {
-      await changeQuoteStatus(quote, newStatus)
-      setQuotes(prev => prev.map(q => q.id === quote.id ? { ...q, quote_status: newStatus } : q))
-      if (newStatus === 'נשלחה ללקוח' && quote.lead_id) {
+      const result = await changeQuoteStatus(quote, newStatus)
+      setQuotes(prev => prev.map(q => q.id === quote.id ? { ...q, ...result.quote, customers: q.customers } : q))
+      if (result.order) {
+        toast({
+          type: 'success',
+          title: result.orderCreated ? 'ההצעה אושרה — נפתחה הזמנה' : 'ההצעה אושרה',
+          description: `הזמנה ${result.order.order_number}${result.orderCreated ? ' נוצרה אוטומטית כולל רישום העלויות בהוצאות' : ' כבר מקושרת'}`,
+        })
+      } else if (newStatus === 'נשלחה ללקוח' && quote.lead_id) {
         toast({ type: 'info', title: 'הליד עודכן', description: 'נקבע מעקב אוטומטי בעוד 3 ימים' })
       }
     } catch {
