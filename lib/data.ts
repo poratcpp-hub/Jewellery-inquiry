@@ -649,11 +649,21 @@ export async function recordOrderPayment(
   return { payment: saved, order: synced }
 }
 
-/** Re-syncs an order's payment state from the database (e.g. after edits made outside the order page). */
-export async function syncOrderPaymentStateById(orderId: string): Promise<Order | null> {
+/**
+ * Re-syncs an order's payment state from the database (e.g. after edits made
+ * outside the order page). With `onlyIfPayments`, orders that have no
+ * recorded payments are left alone so a manually entered deposit isn't
+ * overridden.
+ */
+export async function syncOrderPaymentStateById(
+  orderId: string,
+  opts: { onlyIfPayments?: boolean } = {},
+): Promise<Order | null> {
   try {
     const order = await getOrder(orderId)
-    return await syncOrderPaymentState(order, order.payments ?? [])
+    const payments = order.payments ?? []
+    if (opts.onlyIfPayments && payments.length === 0) return null
+    return await syncOrderPaymentState(order, payments)
   } catch {
     return null
   }

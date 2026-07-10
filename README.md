@@ -30,8 +30,9 @@ The database schema lives in `supabase/schema.sql` (plus follow-up migration scr
 | `npm run start` | Serve the production build |
 | `npm run lint` | ESLint over the whole repo |
 | `npm run typecheck` | TypeScript type check (`tsc --noEmit`) |
+| `npm test` | Unit tests (Vitest) for the business logic in `lib/` |
 
-CI (`.github/workflows/ci.yml`) runs lint → typecheck → build (in demo mode) on every push to `main` and every pull request.
+CI (`.github/workflows/ci.yml`) runs lint → typecheck → test → build (in demo mode) on every push to `main` and every pull request.
 
 ## Architecture
 

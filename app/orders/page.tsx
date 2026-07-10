@@ -13,7 +13,7 @@ import { TableSkeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
 import { useDebounce, useTableSort } from '@/lib/hooks'
 import { formatCurrency, formatDate, daysUntil, exportCsv } from '@/lib/utils'
-import { getOrders, upsertOrder, deleteOrder, getCustomers, getSuppliers, refreshCustomerStats } from '@/lib/data'
+import { getOrders, upsertOrder, deleteOrder, getCustomers, getSuppliers, refreshCustomerStats, syncOrderPaymentStateById } from '@/lib/data'
 import { ORDER_STATUSES, PAYMENT_STATUSES, CLOSED_ORDER_STATUSES } from '@/lib/constants'
 import { InlineStatusSelect } from '@/components/ui/inline-status-select'
 import type { Order, Customer, Supplier } from '@/lib/types'
@@ -79,7 +79,11 @@ export default function OrdersPage() {
       const saved = await upsertOrder(editing ? { ...editing, ...data } : data)
       const enriched = enrich(saved)
       if (editing) {
-        setOrders(prev => prev.map(o => o.id === editing.id ? enriched as Order : o))
+        // If the sale price changed, re-derive balance/payment status from
+        // the payments actually recorded on the order
+        const synced = await syncOrderPaymentStateById(saved.id, { onlyIfPayments: true })
+        const next = synced ? enrich({ ...(enriched as Order), ...synced }) : enriched
+        setOrders(prev => prev.map(o => o.id === editing.id ? next as Order : o))
         toast({ type: 'success', title: 'ההזמנה עודכנה' })
       } else {
         setOrders(prev => [{ ...enriched, id: enriched.id || Math.random().toString(36).slice(2) } as Order, ...prev])

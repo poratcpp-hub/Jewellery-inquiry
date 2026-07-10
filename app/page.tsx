@@ -10,7 +10,7 @@ import { useToast } from '@/components/ui/toast'
 import Link from 'next/link'
 import { TrendingUp, TrendingDown, DollarSign, ShoppingBag, FileText, Target, AlertCircle, Calendar, ArrowLeft, AlertTriangle, Clock, WifiOff } from 'lucide-react'
 import { formatCurrency, formatDate } from '@/lib/utils'
-import { getPayments, getExpenses, getLeads, getQuotes, getOrders, getCustomers, checkDatabaseConnection, logSupabaseError } from '@/lib/data'
+import { getPayments, getExpenses, getLeads, getQuotes, getOrders, getCustomers, checkDatabaseConnection, autoExpireQuotes, logSupabaseError } from '@/lib/data'
 import type { DashboardMetrics, Order, Lead, Quote } from '@/lib/types'
 import { CLOSED_ORDER_STATUSES, CLOSED_QUOTE_STATUSES, CLOSED_LEAD_STATUSES } from '@/lib/constants'
 
@@ -200,9 +200,12 @@ export default function DashboardPage() {
       const payments  = paymentsR.status  === 'fulfilled' ? paymentsR.value  : []
       const expenses  = expensesR.status  === 'fulfilled' ? expensesR.value  : []
       const leads     = leadsR.status     === 'fulfilled' ? leadsR.value     : []
-      const quotes    = quotesR.status    === 'fulfilled' ? quotesR.value    : []
+      const rawQuotes = quotesR.status    === 'fulfilled' ? quotesR.value    : []
       const orders    = ordersR.status    === 'fulfilled' ? ordersR.value    : []
       const customers = customersR.status === 'fulfilled' ? customersR.value : []
+
+      // Expire stale quotes before computing metrics so "open quotes" is truthful
+      const quotes = await autoExpireQuotes(rawQuotes).catch(() => rawQuotes)
 
       // Log any individual full-query failures via logSupabaseError
       const results = [
