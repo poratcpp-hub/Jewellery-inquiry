@@ -214,7 +214,7 @@ export default function SuppliersPage() {
           <Input className="pr-9" placeholder="חיפוש לפי שם, קטגוריה, מיקום..." value={search} onChange={e => setSearch(e.target.value)} />
         </div>
 
-        <div className="bg-white rounded-xl border border-[#e5ddd0] shadow-[0_1px_8px_rgba(26,18,9,0.06)] overflow-hidden">
+        <div className="glass-card rounded-xl overflow-hidden">
           {loading ? <TableSkeleton rows={4} cols={6} /> : (
             <Table>
               <TableHeader>

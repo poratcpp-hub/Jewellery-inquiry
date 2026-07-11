@@ -26,7 +26,7 @@ export function TableBody({ className, ...props }: React.HTMLAttributes<HTMLTabl
 export function TableRow({ className, ...props }: React.HTMLAttributes<HTMLTableRowElement>) {
   return (
     <tr
-      className={cn('transition-colors duration-150 hover:bg-gold-50/50 data-[state=selected]:bg-champagne', className)}
+      className={cn('transition-colors duration-150 hover:bg-white/45 data-[state=selected]:bg-champagne', className)}
       {...props}
     />
   )
@@ -36,7 +36,7 @@ export function TableHead({ className, ...props }: React.ThHTMLAttributes<HTMLTa
   return (
     <th
       className={cn(
-        'h-11 px-4 text-right text-[11px] font-semibold text-clay uppercase tracking-[0.08em] align-middle bg-cream/90 whitespace-nowrap',
+        'h-11 px-4 text-right text-[11px] font-semibold text-clay uppercase tracking-[0.08em] align-middle bg-white/35 backdrop-blur-sm whitespace-nowrap',
         className
       )}
       {...props}
@@ -66,7 +66,7 @@ export function SortableHead({ children, sortKey, activeSortKey, sortDir, onSort
   return (
     <th
       className={cn(
-        'h-11 px-4 text-right text-[11px] font-semibold text-clay uppercase tracking-[0.08em] align-middle bg-cream/90 whitespace-nowrap',
+        'h-11 px-4 text-right text-[11px] font-semibold text-clay uppercase tracking-[0.08em] align-middle bg-white/35 backdrop-blur-sm whitespace-nowrap',
         sortKey && 'cursor-pointer select-none hover:text-ink transition-colors',
         className
       )}

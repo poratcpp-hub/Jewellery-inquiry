@@ -144,7 +144,7 @@ function ConversionFunnel({ leads, quotes, orders }: { leads: Lead[], quotes: Qu
   }, [leads, quotes, orders])
 
   return (
-    <div className="bg-white rounded-xl border border-[#e5ddd0] shadow-[0_1px_8px_rgba(26,18,9,0.06)] p-5">
+    <div className="glass-card rounded-xl p-5">
       <h3 className="text-sm font-semibold text-[#2c1810] mb-4">משפך המרות</h3>
       <div className="flex items-center gap-2">
         {steps.map((step, i) => (

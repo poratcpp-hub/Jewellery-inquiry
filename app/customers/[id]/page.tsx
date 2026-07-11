@@ -88,7 +88,7 @@ export default function CustomerDetailPage() {
         </div>
 
         {/* Info card */}
-        <div className="bg-white rounded-xl border border-[#e5ddd0] p-4">
+        <div className="glass-card rounded-xl p-4">
           <h2 className="font-semibold text-[#2c1810] mb-3 text-sm">פרטי קשר</h2>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
             {customer.phone && (
@@ -156,7 +156,7 @@ export default function CustomerDetailPage() {
         </div>
 
         {/* Tabs */}
-        <div className="bg-white rounded-xl border border-[#e5ddd0] overflow-hidden">
+        <div className="glass-card rounded-xl overflow-hidden">
           <div className="flex border-b border-[#e5ddd0]">
             {([
               { key: 'orders', label: 'הזמנות', count: orders.length, icon: ShoppingBag },

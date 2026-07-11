@@ -58,10 +58,10 @@ const ICONS: Record<ToastType, React.ReactNode> = {
 }
 
 const STYLES: Record<ToastType, string> = {
-  success: 'border-emerald-200 bg-emerald-50',
-  error:   'border-red-200 bg-red-50',
-  warning: 'border-amber-200 bg-amber-50',
-  info:    'border-blue-200 bg-blue-50',
+  success: 'border-emerald-200/70 bg-emerald-50/85',
+  error:   'border-red-200/70 bg-red-50/85',
+  warning: 'border-amber-200/70 bg-amber-50/85',
+  info:    'border-blue-200/70 bg-blue-50/85',
 }
 
 function ToastContainer({ toasts, dismiss }: { toasts: ToastMessage[]; dismiss: (id: string) => void }) {
@@ -72,7 +72,7 @@ function ToastContainer({ toasts, dismiss }: { toasts: ToastMessage[]; dismiss: 
         <div
           key={t.id}
           className={cn(
-            'flex items-start gap-3 p-3.5 rounded-xl border shadow-pop bg-white animate-toast-in',
+            'flex items-start gap-3 p-3.5 rounded-xl border shadow-pop backdrop-blur-xl animate-toast-in',
             STYLES[t.type]
           )}
         >

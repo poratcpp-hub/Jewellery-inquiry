@@ -134,8 +134,8 @@ export function Topbar({ onNewInquiry }: TopbarProps) {
   }
 
   return (
-    <header className="sticky top-0 z-30 border-b border-sand/70 bg-cream/85 backdrop-blur-md">
-      <div className="mx-auto flex h-16 max-w-[1440px] items-center gap-2 px-3 sm:gap-4 sm:px-6">
+    <header className="sticky top-0 z-30 px-3 pt-3 sm:px-6">
+      <div className="glass-card mx-auto flex h-16 max-w-[1440px] items-center gap-2 rounded-2xl px-3 sm:gap-4 sm:px-5">
         {/* Brand */}
         <Link href="/" className="hidden shrink-0 sm:block">
           <Image src="/porat-logo.svg" alt="PORAT Private Jeweler" width={104} height={42} priority />
@@ -143,7 +143,7 @@ export function Topbar({ onNewInquiry }: TopbarProps) {
 
         {/* Floating dark pill menu */}
         <nav className="no-scrollbar min-w-0 flex-1 overflow-x-auto py-2">
-          <div className="mx-auto flex w-max items-center gap-0.5 rounded-full bg-gradient-to-b from-[#2c1810] to-[#1d0f07] p-1.5 shadow-pop ring-1 ring-white/10">
+          <div className="glass-dark mx-auto flex w-max items-center gap-0.5 rounded-full p-1.5">
             {navItems.map(item => {
               const Icon = item.icon
               const isActive = item.href === '/' ? pathname === '/' : pathname.startsWith(item.href)
@@ -193,7 +193,7 @@ export function Topbar({ onNewInquiry }: TopbarProps) {
             <button
               onClick={() => setBellOpen(v => !v)}
               title="התראות"
-              className="relative flex h-10 w-10 items-center justify-center rounded-full border border-sand bg-white text-ink-soft shadow-card transition-all duration-200 hover:border-gold-300 hover:text-gold-600"
+              className="relative flex h-10 w-10 items-center justify-center rounded-full border border-white/70 bg-white/55 text-ink-soft shadow-card backdrop-blur-md transition-all duration-200 hover:border-gold-300 hover:text-gold-600"
             >
               <Bell size={17} />
               {alerts.length > 0 && (
@@ -204,7 +204,7 @@ export function Topbar({ onNewInquiry }: TopbarProps) {
             </button>
 
             {bellOpen && (
-              <div className="absolute left-0 mt-2 w-80 overflow-hidden rounded-xl border border-sand bg-white shadow-pop animate-dialog-in z-50">
+              <div className="glass-pop absolute left-0 mt-2 w-80 overflow-hidden rounded-xl animate-dialog-in z-50">
                 <div className="flex items-center justify-between border-b border-[#f0ebe0] px-4 py-2.5">
                   <p className="text-sm font-semibold text-[#2c1810]">התראות</p>
                   {alerts.length > 0 && (
@@ -243,7 +243,7 @@ export function Topbar({ onNewInquiry }: TopbarProps) {
             </button>
 
             {menuOpen && !IS_DEMO && (
-              <div className="absolute left-0 mt-2 w-52 overflow-hidden rounded-xl border border-sand bg-white py-1 shadow-pop animate-dialog-in z-50">
+              <div className="glass-pop absolute left-0 mt-2 w-52 overflow-hidden rounded-xl py-1 animate-dialog-in z-50">
                 {userEmail && (
                   <div className="border-b border-[#f0ebe0] px-4 py-2.5">
                     <p className="text-xs text-[#7a6a52]">מחובר כ</p>

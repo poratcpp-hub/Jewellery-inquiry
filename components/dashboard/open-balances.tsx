@@ -15,7 +15,7 @@ export function OpenBalances({ orders }: { orders: Order[] }) {
   const top = open.slice(0, 5)
 
   return (
-    <div className="relative flex h-full flex-col overflow-hidden rounded-2xl bg-gradient-to-b from-[#231208] via-[#2c1810] to-[#1d0f07] p-5 shadow-card">
+    <div className="glass-dark relative flex h-full flex-col overflow-hidden rounded-2xl p-5">
       {/* faint gold glow in the corner */}
       <div className="pointer-events-none absolute -top-16 -left-16 h-48 w-48 rounded-full bg-gold-500/15 blur-3xl" />
 

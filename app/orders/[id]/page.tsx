@@ -299,7 +299,7 @@ export default function OrderDetailPage() {
 
         {/* Customer + Supplier */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="bg-white rounded-xl border border-[#e5ddd0] p-4">
+          <div className="glass-card rounded-xl p-4">
             <h2 className="font-semibold text-[#2c1810] mb-2 text-sm">לקוח</h2>
             <div className="flex items-center justify-between">
               <div>
@@ -314,7 +314,7 @@ export default function OrderDetailPage() {
             </div>
           </div>
           {order.suppliers && (
-            <div className="bg-white rounded-xl border border-[#e5ddd0] p-4">
+            <div className="glass-card rounded-xl p-4">
               <h2 className="font-semibold text-[#2c1810] mb-2 text-sm">ספק</h2>
               <p className="font-medium">{order.suppliers.name}</p>
               {order.suppliers.contact_name && <p className="text-xs text-[#7a6a52]">{order.suppliers.contact_name}</p>}
@@ -324,7 +324,7 @@ export default function OrderDetailPage() {
         </div>
 
         {/* Production stepper */}
-        <div className="bg-white rounded-xl border border-[#e5ddd0] p-4">
+        <div className="glass-card rounded-xl p-4">
           <div className="flex items-center justify-between mb-3">
             <h2 className="font-semibold text-[#2c1810] text-sm">שלב ייצור</h2>
             <Select
@@ -340,7 +340,7 @@ export default function OrderDetailPage() {
         </div>
 
         {/* Jewelry specs */}
-        <div className="bg-white rounded-xl border border-[#e5ddd0] p-4">
+        <div className="glass-card rounded-xl p-4">
           <h2 className="font-semibold text-[#2c1810] mb-3 text-sm">פרטי תכשיט</h2>
           {order.description && (
             <p className="text-sm text-[#4a3728] mb-3 bg-[#faf8f5] rounded-lg p-2">{order.description}</p>
@@ -383,7 +383,7 @@ export default function OrderDetailPage() {
         )}
 
         {/* Financial summary */}
-        <div className="bg-white rounded-xl border border-[#e5ddd0] p-4">
+        <div className="glass-card rounded-xl p-4">
           <h2 className="font-semibold text-[#2c1810] mb-3 text-sm">מידע פיננסי</h2>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm">
             <div>
@@ -418,7 +418,7 @@ export default function OrderDetailPage() {
         </div>
 
         {/* Payments */}
-        <div className="bg-white rounded-xl border border-[#e5ddd0] p-4">
+        <div className="glass-card rounded-xl p-4">
           <div className="flex items-center justify-between mb-3">
             <h2 className="font-semibold text-[#2c1810] text-sm">תשלומים מלקוח ({payments.length})</h2>
           </div>
@@ -500,7 +500,7 @@ export default function OrderDetailPage() {
         </div>
 
         {/* Expenses */}
-        <div className="bg-white rounded-xl border border-[#e5ddd0] p-4">
+        <div className="glass-card rounded-xl p-4">
           <div className="flex items-center justify-between mb-3">
             <div>
               <h2 className="font-semibold text-[#2c1810] text-sm">הוצאות ({expenses.length})</h2>
@@ -612,7 +612,7 @@ export default function OrderDetailPage() {
         </div>
 
         {/* Status change */}
-        <div className="bg-white rounded-xl border border-[#e5ddd0] p-4">
+        <div className="glass-card rounded-xl p-4">
           <h2 className="font-semibold text-[#2c1810] mb-3 text-sm">עדכון סטטוס הזמנה</h2>
           <div className="flex gap-2 flex-wrap">
             {ORDER_STATUSES.map(s => (
@@ -630,7 +630,7 @@ export default function OrderDetailPage() {
 
         {/* Notes */}
         {order.notes && (
-          <div className="bg-white rounded-xl border border-[#e5ddd0] p-4 pb-6">
+          <div className="glass-card rounded-xl p-4 pb-6">
             <h2 className="font-semibold text-[#2c1810] mb-2 text-sm">הערות</h2>
             <p className="text-sm text-[#4a3728] whitespace-pre-wrap">{order.notes}</p>
           </div>

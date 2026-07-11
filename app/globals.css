@@ -86,6 +86,37 @@
   --warm-brown: #4a3728;
 }
 
+/* ─── Glassmorphism surfaces ────────────────────────────────────────────────
+   The UI floats as frosted-glass panels above an ambient backdrop. */
+@utility glass-card {
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0.48));
+  backdrop-filter: blur(20px) saturate(1.5);
+  -webkit-backdrop-filter: blur(20px) saturate(1.5);
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  box-shadow:
+    0 1px 2px rgba(26, 18, 9, 0.04),
+    0 12px 32px rgba(26, 18, 9, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.85);
+}
+
+/* Stronger glass for popovers, dropdowns, and dialogs — content stays crisp */
+@utility glass-pop {
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0.82));
+  backdrop-filter: blur(24px) saturate(1.5);
+  -webkit-backdrop-filter: blur(24px) saturate(1.5);
+  border: 1px solid rgba(255, 255, 255, 0.75);
+  box-shadow: 0 8px 16px rgba(26, 18, 9, 0.08), 0 20px 48px rgba(26, 18, 9, 0.14);
+}
+
+/* Dark smoked glass — deep brown, for the featured panels and pill nav */
+@utility glass-dark {
+  background: linear-gradient(165deg, rgba(35, 18, 8, 0.88), rgba(29, 15, 7, 0.92));
+  backdrop-filter: blur(18px) saturate(1.4);
+  -webkit-backdrop-filter: blur(18px) saturate(1.4);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  box-shadow: 0 8px 16px rgba(26, 18, 9, 0.14), 0 20px 48px rgba(26, 18, 9, 0.22);
+}
+
 * {
   box-sizing: border-box;
 }
@@ -95,14 +126,14 @@ html {
 }
 
 body {
-  background-color: var(--color-cream);
+  background-color: #f4efe6;
   color: var(--color-ink-deep);
   font-family: var(--font-sans);
   direction: rtl;
   font-feature-settings: 'tnum';
 }
 
-/* Warm ambient glow at the top of the app — barely there, but lifts the page */
+/* Ambient scene behind the glass — warm gold light with a cool tech accent */
 body::before {
   content: '';
   position: fixed;
@@ -110,8 +141,25 @@ body::before {
   pointer-events: none;
   z-index: 0;
   background:
-    radial-gradient(900px 360px at 85% -80px, rgba(184, 147, 74, 0.07), transparent 70%),
-    radial-gradient(700px 300px at 15% -60px, rgba(184, 147, 74, 0.045), transparent 70%);
+    radial-gradient(620px 460px at 88% -6%, rgba(212, 169, 106, 0.4), transparent 65%),
+    radial-gradient(720px 520px at -12% 18%, rgba(255, 251, 240, 0.95), transparent 62%),
+    radial-gradient(560px 440px at 16% 112%, rgba(122, 134, 214, 0.2), transparent 65%),
+    radial-gradient(640px 480px at 108% 82%, rgba(184, 147, 74, 0.22), transparent 65%);
+}
+
+/* Fine engineering grid, fading toward the bottom — the "tech" layer */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-image:
+    linear-gradient(rgba(44, 24, 16, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(44, 24, 16, 0.03) 1px, transparent 1px);
+  background-size: 44px 44px;
+  mask-image: radial-gradient(ellipse 120% 90% at 50% 0%, black, transparent 80%);
+  -webkit-mask-image: radial-gradient(ellipse 120% 90% at 50% 0%, black, transparent 80%);
 }
 
 /* Typography niceties */

@@ -171,7 +171,7 @@ export default function QuoteDetailPage() {
         )}
 
         {/* Customer card */}
-        <div className="bg-white rounded-xl border border-[#e5ddd0] p-4">
+        <div className="glass-card rounded-xl p-4">
           <h2 className="font-semibold text-[#2c1810] mb-3 text-sm">לקוח</h2>
           <div className="flex items-center justify-between">
             <div>
@@ -194,7 +194,7 @@ export default function QuoteDetailPage() {
         </div>
 
         {/* Jewelry details */}
-        <div className="bg-white rounded-xl border border-[#e5ddd0] p-4">
+        <div className="glass-card rounded-xl p-4">
           <h2 className="font-semibold text-[#2c1810] mb-3 text-sm">פרטי תכשיט</h2>
           {quote.description && (
             <p className="text-sm text-[#4a3728] mb-3 bg-[#faf8f5] rounded-lg p-2">{quote.description}</p>
@@ -216,7 +216,7 @@ export default function QuoteDetailPage() {
 
         {/* Diamond details */}
         {(quote.diamond_type || quote.carat) && (
-          <div className="bg-white rounded-xl border border-[#e5ddd0] p-4">
+          <div className="glass-card rounded-xl p-4">
             <h2 className="font-semibold text-[#2c1810] mb-3 text-sm">פרטי יהלום</h2>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
               {[
@@ -238,7 +238,7 @@ export default function QuoteDetailPage() {
         )}
 
         {/* Cost breakdown */}
-        <div className="bg-white rounded-xl border border-[#e5ddd0] p-4">
+        <div className="glass-card rounded-xl p-4">
           <h2 className="font-semibold text-[#2c1810] mb-3 text-sm">עלויות ורווח</h2>
           <div className="space-y-1.5 mb-4">
             {COST_ROWS.filter(r => (quote[r.key] || 0) > 0).map(({ key, label }) => (
@@ -278,7 +278,7 @@ export default function QuoteDetailPage() {
 
         {/* Notes */}
         {quote.notes && (
-          <div className="bg-white rounded-xl border border-[#e5ddd0] p-4">
+          <div className="glass-card rounded-xl p-4">
             <h2 className="font-semibold text-[#2c1810] mb-2 text-sm">הערות</h2>
             <p className="text-sm text-[#4a3728] whitespace-pre-wrap">{quote.notes}</p>
           </div>

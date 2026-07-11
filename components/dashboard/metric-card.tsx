@@ -12,11 +12,11 @@ interface MetricCardProps {
 }
 
 const variantConfig = {
-  default: { bg: 'bg-white', icon: 'bg-champagne text-gold-600 ring-1 ring-gold-200/60', border: 'border-sand' },
-  gold:    { bg: 'bg-gradient-to-br from-gold-400 via-gold-500 to-gold-600', icon: 'bg-white/20 text-white ring-1 ring-white/25', border: 'border-gold-500' },
-  success: { bg: 'bg-white', icon: 'bg-emerald-50 text-emerald-600 ring-1 ring-emerald-100', border: 'border-sand' },
-  warning: { bg: 'bg-white', icon: 'bg-amber-50 text-amber-600 ring-1 ring-amber-100', border: 'border-sand' },
-  danger:  { bg: 'bg-white', icon: 'bg-red-50 text-red-600 ring-1 ring-red-100', border: 'border-sand' },
+  default: { bg: 'glass-card', icon: 'bg-champagne/80 text-gold-600 ring-1 ring-gold-200/60', border: '' },
+  gold:    { bg: 'bg-gradient-to-br from-gold-400 via-gold-500 to-gold-600', icon: 'bg-white/20 text-white ring-1 ring-white/25', border: 'border border-gold-500' },
+  success: { bg: 'glass-card', icon: 'bg-emerald-50/90 text-emerald-600 ring-1 ring-emerald-100', border: '' },
+  warning: { bg: 'glass-card', icon: 'bg-amber-50/90 text-amber-600 ring-1 ring-amber-100', border: '' },
+  danger:  { bg: 'glass-card', icon: 'bg-red-50/90 text-red-600 ring-1 ring-red-100', border: '' },
 } as const
 
 export const MetricCard = React.memo(function MetricCard({
@@ -27,7 +27,8 @@ export const MetricCard = React.memo(function MetricCard({
 
   return (
     <div className={cn(
-      'group relative overflow-hidden rounded-xl border p-5 shadow-card transition-all duration-300 hover:shadow-card-hover hover:-translate-y-0.5',
+      'group relative overflow-hidden rounded-xl p-5 transition-all duration-300 hover:shadow-card-hover hover:-translate-y-0.5',
+      variant === 'gold' && 'shadow-card',
       config.bg, config.border, className
     )}>
       {/* Soft sheen sweeping across the gold card */}

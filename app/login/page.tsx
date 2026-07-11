@@ -72,7 +72,6 @@ export default function LoginPage() {
     <div
       dir="rtl"
       className="min-h-screen flex items-center justify-center px-4 py-12"
-      style={{ backgroundColor: '#faf8f5' }}
     >
       <div className="w-full max-w-md">
         {/* Demo mode banner */}
@@ -90,13 +89,7 @@ export default function LoginPage() {
         )}
 
         {/* Card */}
-        <div
-          className="rounded-2xl px-8 py-10 animate-rise-in"
-          style={{
-            backgroundColor: '#ffffff',
-            boxShadow: '0 4px 32px rgba(44, 24, 16, 0.10), 0 1px 4px rgba(184, 147, 74, 0.08)',
-          }}
-        >
+        <div className="glass-card rounded-2xl px-8 py-10 animate-rise-in">
           {/* Logo */}
           <div className="flex flex-col items-center mb-8">
             <div className="relative w-28 h-16 mb-4">

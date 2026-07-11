@@ -8,7 +8,7 @@ export function Shell({ children, title }: { children: React.ReactNode; title?: 
   const [inquiryOpen, setInquiryOpen] = useState(false)
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-[#faf8f5]" dir="rtl">
+    <div className="flex h-screen flex-col overflow-hidden" dir="rtl">
       <Topbar title={title} onNewInquiry={() => setInquiryOpen(true)} />
       <main className="flex-1 overflow-y-auto p-4 sm:p-6">
         {children}

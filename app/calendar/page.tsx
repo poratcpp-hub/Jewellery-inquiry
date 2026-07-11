@@ -95,7 +95,7 @@ export default function CalendarPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           {/* Calendar grid */}
-          <div className="lg:col-span-2 bg-white rounded-xl border border-[#e5ddd0] overflow-hidden shadow-[0_1px_8px_rgba(26,18,9,0.06)]">
+          <div className="lg:col-span-2 glass-card rounded-xl overflow-hidden shadow-[0_1px_8px_rgba(26,18,9,0.06)]">
             {/* Day headers */}
             <div className="grid grid-cols-7 border-b border-[#e5ddd0]">
               {HEBREW_DAYS.map(d => (
@@ -160,7 +160,7 @@ export default function CalendarPage() {
           <div className="space-y-4">
             {/* Selected day detail */}
             {selectedDay && (
-              <div className="bg-white rounded-xl border border-[#e5ddd0] p-4 shadow-[0_1px_8px_rgba(26,18,9,0.06)]">
+              <div className="glass-card rounded-xl p-4 shadow-[0_1px_8px_rgba(26,18,9,0.06)]">
                 <div className="flex items-center gap-2 mb-3">
                   <Calendar size={15} className="text-[#b8934a]" />
                   <h3 className="font-semibold text-[#2c1810] text-sm">
@@ -193,7 +193,7 @@ export default function CalendarPage() {
             )}
 
             {/* Upcoming 14 days */}
-            <div className="bg-white rounded-xl border border-[#e5ddd0] p-4 shadow-[0_1px_8px_rgba(26,18,9,0.06)]">
+            <div className="glass-card rounded-xl p-4 shadow-[0_1px_8px_rgba(26,18,9,0.06)]">
               <h3 className="font-semibold text-[#2c1810] text-sm mb-3">מסירות ב-14 ימים הקרובים</h3>
               {loading ? (
                 <p className="text-sm text-[#7a6a52]">טוען...</p>

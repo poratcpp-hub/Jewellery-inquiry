@@ -31,7 +31,7 @@ export function Dialog({ open, onClose, children, className }: DialogProps) {
       />
       <div
         className={cn(
-          'relative z-10 bg-white rounded-2xl shadow-pop ring-1 ring-sand/60 w-full max-h-[90vh] overflow-y-auto animate-dialog-in',
+          'glass-pop relative z-10 rounded-2xl w-full max-h-[90vh] overflow-y-auto animate-dialog-in',
           className
         )}
       >
@@ -70,7 +70,7 @@ export function DialogBody({ children, className }: { children: React.ReactNode;
 
 export function DialogFooter({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex items-center justify-end gap-3 p-6 border-t border-sand-soft bg-cream rounded-b-2xl">
+    <div className="flex items-center justify-end gap-3 p-6 border-t border-sand-soft/70 bg-champagne/40 rounded-b-2xl">
       {children}
     </div>
   )

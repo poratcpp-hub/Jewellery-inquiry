@@ -32,7 +32,7 @@ export function MetricsSkeleton() {
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
       {Array.from({ length: 4 }).map((_, i) => (
-        <div key={i} className="rounded-xl bg-white border border-sand p-5 space-y-3 shadow-card">
+        <div key={i} className="glass-card rounded-xl p-5 space-y-3">
           <Skeleton className="h-3 w-24" />
           <Skeleton className="h-7 w-32" />
           <Skeleton className="h-3 w-20" />

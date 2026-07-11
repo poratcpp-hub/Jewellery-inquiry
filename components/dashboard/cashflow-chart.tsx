@@ -15,7 +15,7 @@ export function CashflowChart({ data }: { data: CashflowMonth[] }) {
   const h = (v: number) => `${Math.max((v / max) * 100, v > 0 ? 3 : 0)}%`
 
   return (
-    <div className="rounded-2xl border border-sand bg-white p-5 shadow-card">
+    <div className="glass-card rounded-2xl p-5">
       <div className="mb-5 flex items-start justify-between">
         <div>
           <h3 className="font-display text-lg font-semibold text-ink">תזרים מזומנים</h3>

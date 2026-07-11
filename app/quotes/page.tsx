@@ -157,7 +157,7 @@ export default function QuotesPage() {
           <FilterChips options={QUOTE_STATUSES} value={statusFilter} onChange={setStatusFilter} counts={statusCounts} allCount={quotes.length} />
         </div>
 
-        <div className="bg-white rounded-xl border border-[#e5ddd0] shadow-[0_1px_8px_rgba(26,18,9,0.06)] overflow-hidden">
+        <div className="glass-card rounded-xl overflow-hidden">
           {loading ? <TableSkeleton rows={5} cols={7} /> : (
             <Table>
               <TableHeader>

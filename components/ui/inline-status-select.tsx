@@ -74,7 +74,7 @@ export function InlineStatusSelect({ value, options, onChange, disabled }: Inlin
           ? { bottom: window.innerHeight - pos.top }
           : { top: pos.top }),
       }}
-      className="bg-white rounded-xl border border-[#e5ddd0] shadow-xl py-1 min-w-[160px]"
+      className="glass-pop rounded-xl py-1 min-w-[160px]"
     >
       {options.map(opt => (
         <button

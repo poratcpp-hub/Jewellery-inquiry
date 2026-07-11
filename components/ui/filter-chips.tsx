@@ -24,7 +24,7 @@ export function FilterChips({ options, value, onChange, counts, allLabel = 'הכ
 
   return (
     <div className={cn('overflow-x-auto pb-1 -mb-1', className)}>
-      <div className="inline-flex items-center gap-1 rounded-full border border-sand bg-white p-1 shadow-card whitespace-nowrap">
+      <div className="glass-card inline-flex items-center gap-1 rounded-full p-1 whitespace-nowrap">
         {chips.map(chip => {
           const active = value === chip.key
           return (

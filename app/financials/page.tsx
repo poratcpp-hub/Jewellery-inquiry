@@ -376,7 +376,7 @@ export default function FinancialsPage() {
 
           {/* ── Payments tab ── */}
           <TabsContent value="payments">
-            <div className="bg-white rounded-xl border border-[#e5ddd0] shadow-[0_1px_8px_rgba(26,18,9,0.06)] overflow-hidden">
+            <div className="glass-card rounded-xl overflow-hidden">
               {loading ? <TableSkeleton rows={4} cols={6} /> : (
                 <Table>
                   <TableHeader>
@@ -432,7 +432,7 @@ export default function FinancialsPage() {
 
           {/* ── Expenses tab ── */}
           <TabsContent value="expenses">
-            <div className="bg-white rounded-xl border border-[#e5ddd0] shadow-[0_1px_8px_rgba(26,18,9,0.06)] overflow-hidden">
+            <div className="glass-card rounded-xl overflow-hidden">
               {loading ? <TableSkeleton rows={4} cols={6} /> : (
                 <Table>
                   <TableHeader>
