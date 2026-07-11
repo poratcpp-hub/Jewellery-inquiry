@@ -89,14 +89,14 @@
 /* ─── Glassmorphism surfaces ────────────────────────────────────────────────
    The UI floats as frosted-glass panels above an ambient backdrop. */
 @utility glass-card {
-  background: linear-gradient(150deg, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0.48));
-  backdrop-filter: blur(20px) saturate(1.5);
-  -webkit-backdrop-filter: blur(20px) saturate(1.5);
-  border: 1px solid rgba(255, 255, 255, 0.7);
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0.28));
+  backdrop-filter: blur(26px) saturate(1.7);
+  -webkit-backdrop-filter: blur(26px) saturate(1.7);
+  border: 1px solid rgba(255, 255, 255, 0.65);
   box-shadow:
-    0 1px 2px rgba(26, 18, 9, 0.04),
-    0 12px 32px rgba(26, 18, 9, 0.08),
-    inset 0 1px 0 rgba(255, 255, 255, 0.85);
+    0 1px 2px rgba(26, 18, 9, 0.05),
+    0 16px 40px rgba(26, 18, 9, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.75);
 }
 
 /* Stronger glass for popovers, dropdowns, and dialogs — content stays crisp */
@@ -110,10 +110,10 @@
 
 /* Dark smoked glass — deep brown, for the featured panels and pill nav */
 @utility glass-dark {
-  background: linear-gradient(165deg, rgba(35, 18, 8, 0.88), rgba(29, 15, 7, 0.92));
-  backdrop-filter: blur(18px) saturate(1.4);
-  -webkit-backdrop-filter: blur(18px) saturate(1.4);
-  border: 1px solid rgba(255, 255, 255, 0.09);
+  background: linear-gradient(165deg, rgba(35, 18, 8, 0.72), rgba(29, 15, 7, 0.8));
+  backdrop-filter: blur(22px) saturate(1.5);
+  -webkit-backdrop-filter: blur(22px) saturate(1.5);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   box-shadow: 0 8px 16px rgba(26, 18, 9, 0.14), 0 20px 48px rgba(26, 18, 9, 0.22);
 }
 
@@ -126,14 +126,15 @@ html {
 }
 
 body {
-  background-color: #f4efe6;
+  background-color: #e9e0cf;
   color: var(--color-ink-deep);
   font-family: var(--font-sans);
   direction: rtl;
   font-feature-settings: 'tnum';
 }
 
-/* Ambient scene behind the glass — warm gold light with a cool tech accent */
+/* Ambient scene behind the glass — rich gold light, cool blue/violet tech
+   accents, and a bright pool in the middle that keeps content readable */
 body::before {
   content: '';
   position: fixed;
@@ -141,10 +142,12 @@ body::before {
   pointer-events: none;
   z-index: 0;
   background:
-    radial-gradient(620px 460px at 88% -6%, rgba(212, 169, 106, 0.4), transparent 65%),
-    radial-gradient(720px 520px at -12% 18%, rgba(255, 251, 240, 0.95), transparent 62%),
-    radial-gradient(560px 440px at 16% 112%, rgba(122, 134, 214, 0.2), transparent 65%),
-    radial-gradient(640px 480px at 108% 82%, rgba(184, 147, 74, 0.22), transparent 65%);
+    radial-gradient(720px 540px at 90% -8%, rgba(214, 158, 74, 0.55), transparent 66%),
+    radial-gradient(660px 520px at -8% 10%, rgba(116, 168, 222, 0.44), transparent 62%),
+    radial-gradient(680px 560px at 14% 112%, rgba(126, 112, 216, 0.48), transparent 66%),
+    radial-gradient(700px 540px at 110% 82%, rgba(202, 138, 74, 0.42), transparent 65%),
+    radial-gradient(520px 400px at 62% 108%, rgba(96, 178, 188, 0.3), transparent 65%),
+    radial-gradient(560px 420px at 50% 40%, rgba(255, 250, 238, 0.52), transparent 72%);
 }
 
 /* Fine engineering grid, fading toward the bottom — the "tech" layer */
@@ -155,9 +158,9 @@ body::after {
   pointer-events: none;
   z-index: 0;
   background-image:
-    linear-gradient(rgba(44, 24, 16, 0.03) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(44, 24, 16, 0.03) 1px, transparent 1px);
-  background-size: 44px 44px;
+    linear-gradient(rgba(44, 24, 16, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(44, 24, 16, 0.04) 1px, transparent 1px);
+  background-size: 40px 40px;
   mask-image: radial-gradient(ellipse 120% 90% at 50% 0%, black, transparent 80%);
   -webkit-mask-image: radial-gradient(ellipse 120% 90% at 50% 0%, black, transparent 80%);
 }
