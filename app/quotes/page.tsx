@@ -5,7 +5,7 @@ import { Shell } from '@/components/layout/shell'
 import { PageHeader } from '@/components/layout/page-header'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Select } from '@/components/ui/select'
+import { FilterChips } from '@/components/ui/filter-chips'
 import { Badge, getStatusBadgeVariant } from '@/components/ui/badge'
 import { Table, TableHeader, TableBody, TableRow, SortableHead, TableCell } from '@/components/ui/table'
 import { QuoteForm } from '@/components/quotes/quote-form'
@@ -14,7 +14,7 @@ import { TableSkeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
 import { useDebounce, useTableSort } from '@/lib/hooks'
 import { formatCurrency, formatDate, getProfitColor, exportCsv } from '@/lib/utils'
-import { getQuotes, upsertQuote, deleteQuote, getCustomers } from '@/lib/data'
+import { getQuotes, upsertQuote, deleteQuote, getCustomers, autoExpireQuotes, changeQuoteStatus } from '@/lib/data'
 import { QUOTE_STATUSES } from '@/lib/constants'
 import { InlineStatusSelect } from '@/components/ui/inline-status-select'
 import type { Quote, Customer } from '@/lib/types'
@@ -35,9 +35,10 @@ export default function QuotesPage() {
 
   useEffect(() => {
     Promise.all([getQuotes(), getCustomers()])
-      .then(([q, c]) => {
+      .then(async ([q, c]) => {
+        const fresh = await autoExpireQuotes(q)
         const custMap = Object.fromEntries(c.map(x => [x.id, x]))
-        setQuotes(q.map(quote => ({ ...quote, customers: custMap[quote.customer_id || ''] || quote.customers })))
+        setQuotes(fresh.map(quote => ({ ...quote, customers: custMap[quote.customer_id || ''] || quote.customers })))
         setCustomers(c)
       })
       .catch(() => toast({ type: 'error', title: 'שגיאה בטעינת הנתונים' }))
@@ -49,7 +50,7 @@ export default function QuotesPage() {
   const filtered = useMemo(() => {
     const q = search.toLowerCase()
     return quotes.filter(quote => {
-      const matchSearch = !q || quote.quote_number.toLowerCase().includes(q) ||
+      const matchSearch = !q || (quote.quote_number || '').toLowerCase().includes(q) ||
         (quote.customers?.full_name || '').toLowerCase().includes(q)
       return matchSearch && (!statusFilter || quote.quote_status === statusFilter)
     })
@@ -58,6 +59,12 @@ export default function QuotesPage() {
   const { sorted, sortKey, sortDir, toggleSort } = useTableSort<Quote>(filtered, 'created_at', 'desc')
 
   const totalValue = useMemo(() => filtered.reduce((s, q) => s + q.sale_price, 0), [filtered])
+
+  const statusCounts = useMemo(() => {
+    const counts: Record<string, number> = {}
+    quotes.forEach(q => { counts[q.quote_status] = (counts[q.quote_status] || 0) + 1 })
+    return counts
+  }, [quotes])
 
   const handleSave = useCallback(async (data: Partial<Quote>) => {
     try {
@@ -79,8 +86,17 @@ export default function QuotesPage() {
 
   const handleStatusChange = useCallback(async (quote: Quote, newStatus: string) => {
     try {
-      await upsertQuote({ id: quote.id, quote_status: newStatus, quote_number: quote.quote_number, diamond_cost: quote.diamond_cost, gold_cost: quote.gold_cost, labor_cost: quote.labor_cost, setting_cost: quote.setting_cost, packaging_cost: quote.packaging_cost, shipping_cost: quote.shipping_cost, other_cost: quote.other_cost, total_cost: quote.total_cost, sale_price: quote.sale_price, expected_profit: quote.expected_profit, profit_margin: quote.profit_margin })
-      setQuotes(prev => prev.map(q => q.id === quote.id ? { ...q, quote_status: newStatus } : q))
+      const result = await changeQuoteStatus(quote, newStatus)
+      setQuotes(prev => prev.map(q => q.id === quote.id ? { ...q, ...result.quote, customers: q.customers } : q))
+      if (result.order) {
+        toast({
+          type: 'success',
+          title: result.orderCreated ? 'ההצעה אושרה — נפתחה הזמנה' : 'ההצעה אושרה',
+          description: `הזמנה ${result.order.order_number}${result.orderCreated ? ' נוצרה אוטומטית כולל רישום העלויות בהוצאות' : ' כבר מקושרת'}`,
+        })
+      } else if (newStatus === 'נשלחה ללקוח' && quote.lead_id) {
+        toast({ type: 'info', title: 'הליד עודכן', description: 'נקבע מעקב אוטומטי בעוד 3 ימים' })
+      }
     } catch {
       toast({ type: 'error', title: 'שגיאה בעדכון סטטוס' })
     }
@@ -107,7 +123,7 @@ export default function QuotesPage() {
       קראט: q.carat || '',
       'עלות כוללת': q.total_cost,
       'מחיר מכירה': q.sale_price,
-      'מרווח %': q.profit_margin.toFixed(1),
+      'מרווח %': (q.profit_margin ?? 0).toFixed(1),
       סטטוס: q.quote_status,
       'תוקף עד': q.valid_until || '',
     })))
@@ -133,18 +149,15 @@ export default function QuotesPage() {
           }
         />
 
-        <div className="flex gap-3 mb-4">
-          <div className="relative flex-1">
+        <div className="space-y-3 mb-4">
+          <div className="relative">
             <Search size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#7a6a52]" />
             <Input className="pr-9" placeholder="חיפוש לפי מספר הצעה, לקוח..." onChange={e => handleSearch(e.target.value)} />
           </div>
-          <Select className="w-40" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
-            <option value="">כל הסטטוסים</option>
-            {QUOTE_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
-          </Select>
+          <FilterChips options={QUOTE_STATUSES} value={statusFilter} onChange={setStatusFilter} counts={statusCounts} allCount={quotes.length} />
         </div>
 
-        <div className="bg-white rounded-xl border border-[#e5ddd0] shadow-[0_1px_8px_rgba(26,18,9,0.06)] overflow-hidden">
+        <div className="glass-card rounded-xl overflow-hidden">
           {loading ? <TableSkeleton rows={5} cols={7} /> : (
             <Table>
               <TableHeader>
@@ -178,7 +191,7 @@ export default function QuotesPage() {
                     <TableCell className="font-semibold text-[#2c1810]">{formatCurrency(quote.sale_price)}</TableCell>
                     <TableCell className="hidden md:table-cell">
                       <span className={cn('font-medium text-sm', getProfitColor(quote.profit_margin))}>
-                        {quote.profit_margin.toFixed(1)}%
+                        {(quote.profit_margin ?? 0).toFixed(1)}%
                       </span>
                     </TableCell>
                     <TableCell>

@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useRef } from 'react'
+import { useResetOnOpen } from '@/lib/hooks'
 import { Dialog, DialogHeader, DialogBody, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -52,27 +53,22 @@ export function InquiryForm({ open, onClose, onCreated }: InquiryFormProps) {
   const [saving, setSaving] = useState(false)
   const detectedRef = useRef(false)
 
-  useEffect(() => {
-    if (open) {
-      setForm(EMPTY)
-      setErrors({})
-      setSaving(false)
-      detectedRef.current = false
-    }
-  }, [open])
-
-  useEffect(() => {
-    if (form.original_message && !form.jewelry_type && !detectedRef.current) {
-      const detected = detectJewelryType(form.original_message)
-      if (detected) {
-        setForm(f => ({ ...f, jewelry_type: detected }))
-        detectedRef.current = true
-      }
-    }
-  }, [form.original_message, form.jewelry_type])
+  useResetOnOpen(open, () => {
+    setForm(EMPTY)
+    setErrors({})
+    setSaving(false)
+    detectedRef.current = false
+  })
 
   const set = (key: keyof FormData, value: string) => {
-    setForm(f => ({ ...f, [key]: value }))
+    // Auto-detect the jewelry type from the inquiry message (once, and only
+    // until the user picks a type manually).
+    let detectedType: string | null = null
+    if (key === 'original_message' && value && !form.jewelry_type && !detectedRef.current) {
+      detectedType = detectJewelryType(value)
+      if (detectedType) detectedRef.current = true
+    }
+    setForm(f => ({ ...f, [key]: value, ...(detectedType ? { jewelry_type: detectedType } : {}) }))
     if (errors[key]) setErrors(e => ({ ...e, [key]: '' }))
   }
 

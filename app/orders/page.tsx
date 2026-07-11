@@ -5,7 +5,7 @@ import { Shell } from '@/components/layout/shell'
 import { PageHeader } from '@/components/layout/page-header'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Select } from '@/components/ui/select'
+import { FilterChips } from '@/components/ui/filter-chips'
 import { Table, TableHeader, TableBody, TableRow, SortableHead, TableCell } from '@/components/ui/table'
 import { OrderForm } from '@/components/orders/order-form'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
@@ -13,7 +13,7 @@ import { TableSkeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
 import { useDebounce, useTableSort } from '@/lib/hooks'
 import { formatCurrency, formatDate, daysUntil, exportCsv } from '@/lib/utils'
-import { getOrders, upsertOrder, deleteOrder, getCustomers, getSuppliers, refreshCustomerStats } from '@/lib/data'
+import { getOrders, upsertOrder, createOrder, changeOrderStatus, deleteOrder, getCustomers, getSuppliers, refreshCustomerStats, syncOrderPaymentStateById } from '@/lib/data'
 import { ORDER_STATUSES, PAYMENT_STATUSES, CLOSED_ORDER_STATUSES } from '@/lib/constants'
 import { InlineStatusSelect } from '@/components/ui/inline-status-select'
 import type { Order, Customer, Supplier } from '@/lib/types'
@@ -55,13 +55,19 @@ export default function OrdersPage() {
   const filtered = useMemo(() => {
     const q = search.toLowerCase()
     return orders.filter(o => {
-      const match = !q || o.order_number.toLowerCase().includes(q) ||
+      const match = !q || (o.order_number || '').toLowerCase().includes(q) ||
         (o.customers?.full_name || '').toLowerCase().includes(q)
       return match && (!statusFilter || o.order_status === statusFilter)
     })
   }, [orders, search, statusFilter])
 
   const { sorted, sortKey, sortDir, toggleSort } = useTableSort<Order>(filtered, 'created_at', 'desc')
+
+  const statusCounts = useMemo(() => {
+    const counts: Record<string, number> = {}
+    orders.forEach(o => { counts[o.order_status] = (counts[o.order_status] || 0) + 1 })
+    return counts
+  }, [orders])
 
   const { totalRevenue, totalBalance } = useMemo(() => ({
     totalRevenue: filtered.reduce((s, o) => s + o.sale_price, 0),
@@ -76,18 +82,28 @@ export default function OrdersPage() {
 
   const handleSave = useCallback(async (data: Partial<Order>) => {
     try {
-      const saved = await upsertOrder(editing ? { ...editing, ...data } : data)
-      const enriched = enrich(saved)
       if (editing) {
-        setOrders(prev => prev.map(o => o.id === editing.id ? enriched as Order : o))
+        const saved = await upsertOrder({ ...editing, ...data })
+        // If the sale price changed, re-derive balance/payment status from
+        // the payments actually recorded on the order
+        const synced = await syncOrderPaymentStateById(saved.id, { onlyIfPayments: true })
+        const next = enrich(synced ? { ...saved, ...synced } : saved)
+        setOrders(prev => prev.map(o => o.id === editing.id ? next as Order : o))
         toast({ type: 'success', title: 'ההזמנה עודכנה' })
       } else {
-        setOrders(prev => [{ ...enriched, id: enriched.id || Math.random().toString(36).slice(2) } as Order, ...prev])
-        toast({ type: 'success', title: 'הזמנה חדשה נוצרה' })
+        // createOrder books the deposit as a payment and advances the status
+        const saved = await createOrder(data)
+        setOrders(prev => [enrich(saved) as Order, ...prev])
+        const deposit = Number(data.deposit_amount ?? 0)
+        toast({
+          type: 'success',
+          title: 'הזמנה חדשה נוצרה',
+          description: deposit > 0 ? `מקדמה של ${formatCurrency(deposit)} נרשמה אוטומטית בהכנסות` : undefined,
+        })
       }
       // Fire-and-forget: refresh customer stats after save
-      if (saved.customer_id) {
-        refreshCustomerStats(saved.customer_id).catch(() => {})
+      if (data.customer_id) {
+        refreshCustomerStats(data.customer_id).catch(() => {})
       }
     } catch (err) {
       console.error('[handleSave] Error saving order:', err)
@@ -98,8 +114,8 @@ export default function OrdersPage() {
 
   const handleStatusChange = useCallback(async (order: Order, newStatus: string) => {
     try {
-      await upsertOrder({ id: order.id, order_status: newStatus, customer_id: order.customer_id || undefined })
-      setOrders(prev => prev.map(o => o.id === order.id ? { ...o, order_status: newStatus } : o))
+      const updated = await changeOrderStatus(order, newStatus)
+      setOrders(prev => prev.map(o => o.id === order.id ? { ...o, order_status: updated.order_status } : o))
     } catch {
       toast({ type: 'error', title: 'שגיאה בעדכון סטטוס' })
     }
@@ -160,18 +176,15 @@ export default function OrdersPage() {
           }
         />
 
-        <div className="flex gap-3 mb-4">
-          <div className="relative flex-1">
+        <div className="space-y-3 mb-4">
+          <div className="relative">
             <Search size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#7a6a52]" />
             <Input className="pr-9" placeholder="חיפוש לפי מספר הזמנה, לקוח..." onChange={e => handleSearch(e.target.value)} />
           </div>
-          <Select className="w-44" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
-            <option value="">כל הסטטוסים</option>
-            {ORDER_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
-          </Select>
+          <FilterChips options={ORDER_STATUSES} value={statusFilter} onChange={setStatusFilter} counts={statusCounts} allCount={orders.length} />
         </div>
 
-        <div className="bg-white rounded-xl border border-[#e5ddd0] shadow-[0_1px_8px_rgba(26,18,9,0.06)] overflow-hidden">
+        <div className="glass-card rounded-xl overflow-hidden">
           {loading ? <TableSkeleton rows={5} cols={7} /> : (
             <Table>
               <TableHeader>

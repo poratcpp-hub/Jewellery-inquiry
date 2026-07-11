@@ -11,13 +11,13 @@ export function Table({ className, ...props }: React.HTMLAttributes<HTMLTableEle
 }
 
 export function TableHeader({ className, ...props }: React.HTMLAttributes<HTMLTableSectionElement>) {
-  return <thead className={cn('[&_tr]:border-b [&_tr]:border-[#e5ddd0]', className)} {...props} />
+  return <thead className={cn('[&_tr]:border-b [&_tr]:border-sand', className)} {...props} />
 }
 
 export function TableBody({ className, ...props }: React.HTMLAttributes<HTMLTableSectionElement>) {
   return (
     <tbody
-      className={cn('[&_tr:last-child]:border-0 [&_tr]:border-b [&_tr]:border-[#f0ebe0]', className)}
+      className={cn('[&_tr:last-child]:border-0 [&_tr]:border-b [&_tr]:border-sand-soft', className)}
       {...props}
     />
   )
@@ -26,7 +26,7 @@ export function TableBody({ className, ...props }: React.HTMLAttributes<HTMLTabl
 export function TableRow({ className, ...props }: React.HTMLAttributes<HTMLTableRowElement>) {
   return (
     <tr
-      className={cn('transition-colors hover:bg-[#faf8f5] data-[state=selected]:bg-[#f5efe0]', className)}
+      className={cn('transition-colors duration-150 hover:bg-white/45 data-[state=selected]:bg-champagne', className)}
       {...props}
     />
   )
@@ -36,7 +36,7 @@ export function TableHead({ className, ...props }: React.ThHTMLAttributes<HTMLTa
   return (
     <th
       className={cn(
-        'h-11 px-4 text-right text-xs font-semibold text-[#7a6a52] uppercase tracking-wide align-middle bg-[#faf8f5] whitespace-nowrap',
+        'h-11 px-4 text-right text-[11px] font-semibold text-clay uppercase tracking-[0.08em] align-middle bg-white/35 backdrop-blur-sm whitespace-nowrap',
         className
       )}
       {...props}
@@ -47,7 +47,7 @@ export function TableHead({ className, ...props }: React.ThHTMLAttributes<HTMLTa
 export function TableCell({ className, ...props }: React.TdHTMLAttributes<HTMLTableCellElement>) {
   return (
     <td
-      className={cn('px-4 py-3.5 text-sm text-[#2c1810] align-middle', className)}
+      className={cn('px-4 py-3.5 text-sm text-ink align-middle', className)}
       {...props}
     />
   )
@@ -66,8 +66,8 @@ export function SortableHead({ children, sortKey, activeSortKey, sortDir, onSort
   return (
     <th
       className={cn(
-        'h-11 px-4 text-right text-xs font-semibold text-[#7a6a52] uppercase tracking-wide align-middle bg-[#faf8f5] whitespace-nowrap',
-        sortKey && 'cursor-pointer select-none hover:text-[#2c1810]',
+        'h-11 px-4 text-right text-[11px] font-semibold text-clay uppercase tracking-[0.08em] align-middle bg-white/35 backdrop-blur-sm whitespace-nowrap',
+        sortKey && 'cursor-pointer select-none hover:text-ink transition-colors',
         className
       )}
       onClick={() => sortKey && onSort?.(sortKey)}
@@ -75,7 +75,7 @@ export function SortableHead({ children, sortKey, activeSortKey, sortDir, onSort
     >
       <span className="flex items-center gap-1 justify-end">
         {children}
-        {sortKey && <Icon size={12} className={isActive ? 'text-[#b8934a]' : 'text-[#c5b8a0]'} />}
+        {sortKey && <Icon size={12} className={isActive ? 'text-gold-500' : 'text-taupe'} />}
       </span>
     </th>
   )

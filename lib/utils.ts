@@ -5,13 +5,14 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-export function formatCurrency(amount: number): string {
+export function formatCurrency(amount: number | null | undefined): string {
+  const value = Number(amount)
   return new Intl.NumberFormat('he-IL', {
     style: 'currency',
     currency: 'ILS',
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
-  }).format(amount)
+  }).format(Number.isFinite(value) ? value : 0)
 }
 
 export function formatDate(dateStr: string | undefined | null): string {
@@ -84,20 +85,23 @@ export function calculateOrderFinancials(order: {
   return { balance_due, net_profit, profit_margin }
 }
 
-export function generateQuoteNumber(): string {
+// Collision-resistant document numbers: yymm prefix for readability plus a
+// millisecond-timestamp suffix in base 36 (a 3-digit random suffix collides
+// after a few hundred documents).
+function generateDocumentNumber(prefix: string): string {
   const date = new Date()
   const year = date.getFullYear().toString().slice(-2)
   const month = String(date.getMonth() + 1).padStart(2, '0')
-  const random = Math.floor(Math.random() * 900 + 100)
-  return `Q${year}${month}-${random}`
+  const stamp = Date.now().toString(36).slice(-6).toUpperCase()
+  return `${prefix}${year}${month}-${stamp}`
+}
+
+export function generateQuoteNumber(): string {
+  return generateDocumentNumber('Q')
 }
 
 export function generateOrderNumber(): string {
-  const date = new Date()
-  const year = date.getFullYear().toString().slice(-2)
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const random = Math.floor(Math.random() * 900 + 100)
-  return `O${year}${month}-${random}`
+  return generateDocumentNumber('O')
 }
 
 export function isOverdue(dateStr: string | undefined | null): boolean {
@@ -108,6 +112,7 @@ export function isOverdue(dateStr: string | undefined | null): boolean {
 export function daysUntil(dateStr: string | undefined | null): number | null {
   if (!dateStr) return null
   const diff = new Date(dateStr).getTime() - new Date().getTime()
+  if (Number.isNaN(diff)) return null
   return Math.ceil(diff / (1000 * 60 * 60 * 24))
 }
 

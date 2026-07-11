@@ -11,15 +11,15 @@ const Badge = React.forwardRef<HTMLSpanElement, BadgeProps>(
       <span
         ref={ref}
         className={cn(
-          'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors',
+          'inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap transition-colors',
           {
-            'bg-[#b8934a]/10 text-[#8a6a2e] border border-[#b8934a]/20': variant === 'default',
-            'bg-emerald-50 text-emerald-700 border border-emerald-200': variant === 'success',
-            'bg-amber-50 text-amber-700 border border-amber-200': variant === 'warning',
-            'bg-red-50 text-red-700 border border-red-200': variant === 'destructive',
-            'bg-[#f5efe0] text-[#4a3728] border border-[#e5ddd0]': variant === 'secondary',
-            'bg-white text-[#4a3728] border border-[#e5ddd0]': variant === 'outline',
-            'bg-[#b8934a] text-white': variant === 'gold',
+            'bg-gold-50 text-gold-700 ring-1 ring-inset ring-gold-500/25': variant === 'default',
+            'bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-600/20': variant === 'success',
+            'bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-600/25': variant === 'warning',
+            'bg-red-50 text-red-700 ring-1 ring-inset ring-red-600/20': variant === 'destructive',
+            'bg-champagne text-ink-soft ring-1 ring-inset ring-sand': variant === 'secondary',
+            'bg-white text-clay ring-1 ring-inset ring-sand': variant === 'outline',
+            'bg-gradient-to-b from-gold-400 to-gold-600 text-white shadow-sm [text-shadow:0_1px_1px_rgba(90,64,20,0.3)]': variant === 'gold',
           },
           className
         )}

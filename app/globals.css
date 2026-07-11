@@ -1,5 +1,74 @@
 @import "tailwindcss";
 
+/* ─── Design tokens ─────────────────────────────────────────────────────────
+   Single source of truth for the PORAT brand system.
+   Tailwind 4 turns each token into utilities (bg-gold-500, text-ink, …). */
+@theme {
+  /* Typography */
+  --font-sans: var(--font-heebo), 'Segoe UI', 'Arial Hebrew', Arial, sans-serif;
+  --font-display: var(--font-frank-ruhl), 'Times New Roman', serif;
+
+  /* Brand gold */
+  --color-gold-50: #fdf9ef;
+  --color-gold-100: #f8eed4;
+  --color-gold-200: #f0dca6;
+  --color-gold-300: #e3c377;
+  --color-gold-400: #d4a96a;
+  --color-gold-500: #b8934a;
+  --color-gold-600: #9a7535;
+  --color-gold-700: #7a5a26;
+  --color-gold-800: #5c4120;
+  --color-gold-900: #3d2b14;
+
+  /* Warm neutrals */
+  --color-ink: #2c1810;          /* primary text */
+  --color-ink-deep: #1a1209;     /* headings on light */
+  --color-ink-soft: #4a3728;     /* secondary text */
+  --color-clay: #7a6a52;         /* muted text */
+  --color-taupe: #c5b8a0;        /* faint icons / hairlines */
+  --color-sand: #e5ddd0;         /* borders */
+  --color-sand-soft: #f0ebe0;    /* inner borders, skeleton base */
+  --color-champagne: #f5efe0;    /* hover fills */
+  --color-cream: #faf8f5;        /* app background */
+
+  /* Elevation */
+  --shadow-card: 0 1px 2px rgba(26, 18, 9, 0.04), 0 1px 8px rgba(26, 18, 9, 0.05);
+  --shadow-card-hover: 0 2px 6px rgba(26, 18, 9, 0.06), 0 8px 28px rgba(26, 18, 9, 0.1);
+  --shadow-pop: 0 8px 16px rgba(26, 18, 9, 0.08), 0 20px 48px rgba(26, 18, 9, 0.14);
+  --shadow-gold: 0 1px 2px rgba(122, 90, 38, 0.35), 0 4px 14px rgba(184, 147, 74, 0.35);
+  --shadow-gold-hover: 0 2px 4px rgba(122, 90, 38, 0.35), 0 8px 22px rgba(184, 147, 74, 0.45);
+
+  /* Motion */
+  --ease-out-soft: cubic-bezier(0.16, 1, 0.3, 1);
+  --animate-shimmer: shimmer 1.6s linear infinite;
+  --animate-dialog-in: dialog-in 0.22s var(--ease-out-soft) both;
+  --animate-overlay-in: overlay-in 0.2s ease both;
+  --animate-toast-in: toast-in 0.28s var(--ease-out-soft) both;
+  --animate-rise-in: rise-in 0.3s var(--ease-out-soft) both;
+
+  @keyframes shimmer {
+    from { background-position: 200% 0; }
+    to   { background-position: -200% 0; }
+  }
+  @keyframes dialog-in {
+    from { opacity: 0; transform: translateY(10px) scale(0.97); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  @keyframes overlay-in {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+  @keyframes toast-in {
+    from { opacity: 0; transform: translateY(12px) scale(0.97); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  @keyframes rise-in {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+}
+
+/* Legacy variable aliases — pages still reference these */
 :root {
   --background: #faf8f5;
   --foreground: #1a1209;
@@ -17,6 +86,37 @@
   --warm-brown: #4a3728;
 }
 
+/* ─── Glassmorphism surfaces ────────────────────────────────────────────────
+   The UI floats as frosted-glass panels above an ambient backdrop. */
+@utility glass-card {
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0.28));
+  backdrop-filter: blur(26px) saturate(1.7);
+  -webkit-backdrop-filter: blur(26px) saturate(1.7);
+  border: 1px solid rgba(255, 255, 255, 0.65);
+  box-shadow:
+    0 1px 2px rgba(26, 18, 9, 0.05),
+    0 16px 40px rgba(26, 18, 9, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.75);
+}
+
+/* Stronger glass for popovers, dropdowns, and dialogs — content stays crisp */
+@utility glass-pop {
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0.82));
+  backdrop-filter: blur(24px) saturate(1.5);
+  -webkit-backdrop-filter: blur(24px) saturate(1.5);
+  border: 1px solid rgba(255, 255, 255, 0.75);
+  box-shadow: 0 8px 16px rgba(26, 18, 9, 0.08), 0 20px 48px rgba(26, 18, 9, 0.14);
+}
+
+/* Dark smoked glass — deep brown, for the featured panels and pill nav */
+@utility glass-dark {
+  background: linear-gradient(165deg, rgba(35, 18, 8, 0.72), rgba(29, 15, 7, 0.8));
+  backdrop-filter: blur(22px) saturate(1.5);
+  -webkit-backdrop-filter: blur(22px) saturate(1.5);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 8px 16px rgba(26, 18, 9, 0.14), 0 20px 48px rgba(26, 18, 9, 0.22);
+}
+
 * {
   box-sizing: border-box;
 }
@@ -26,18 +126,89 @@ html {
 }
 
 body {
-  background-color: var(--background);
-  color: var(--foreground);
-  font-family: 'Segoe UI', 'Arial Hebrew', Arial, sans-serif;
+  background-color: #e9e0cf;
+  color: var(--color-ink-deep);
+  font-family: var(--font-sans);
   direction: rtl;
+  font-feature-settings: 'tnum';
 }
 
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: var(--muted); }
-::-webkit-scrollbar-thumb { background: #d4a96a; border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: var(--gold); }
+/* Ambient scene behind the glass — rich gold light, cool blue/violet tech
+   accents, and a bright pool in the middle that keeps content readable */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(720px 540px at 90% -8%, rgba(214, 158, 74, 0.55), transparent 66%),
+    radial-gradient(660px 520px at -8% 10%, rgba(116, 168, 222, 0.44), transparent 62%),
+    radial-gradient(680px 560px at 14% 112%, rgba(126, 112, 216, 0.48), transparent 66%),
+    radial-gradient(700px 540px at 110% 82%, rgba(202, 138, 74, 0.42), transparent 65%),
+    radial-gradient(520px 400px at 62% 108%, rgba(96, 178, 188, 0.3), transparent 65%),
+    radial-gradient(560px 420px at 50% 40%, rgba(255, 250, 238, 0.52), transparent 72%);
+}
+
+/* Fine engineering grid, fading toward the bottom — the "tech" layer */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-image:
+    linear-gradient(rgba(44, 24, 16, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(44, 24, 16, 0.04) 1px, transparent 1px);
+  background-size: 40px 40px;
+  mask-image: radial-gradient(ellipse 120% 90% at 50% 0%, black, transparent 80%);
+  -webkit-mask-image: radial-gradient(ellipse 120% 90% at 50% 0%, black, transparent 80%);
+}
+
+/* Typography niceties */
+::selection {
+  background: rgba(184, 147, 74, 0.25);
+  color: var(--color-ink-deep);
+}
+
+h1, h2, h3 {
+  letter-spacing: -0.01em;
+}
+
+/* Accessible, on-brand focus ring for keyboard navigation */
+:focus-visible {
+  outline: 2px solid var(--color-gold-500);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--color-taupe);
+  border-radius: 8px;
+  border: 2px solid var(--color-cream);
+}
+::-webkit-scrollbar-thumb:hover { background: var(--color-gold-400); }
 
 input[type='number']::-webkit-inner-spin-button,
 input[type='number']::-webkit-outer-spin-button {
   -webkit-appearance: none;
+}
+
+/* Hide the scrollbar on the pill nav while keeping it scrollable */
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Respect users who prefer less motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }

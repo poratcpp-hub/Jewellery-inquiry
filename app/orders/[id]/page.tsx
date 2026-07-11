@@ -11,7 +11,7 @@ import { Badge, getStatusBadgeVariant } from '@/components/ui/badge'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { useToast } from '@/components/ui/toast'
 import { formatCurrency, formatDate, daysUntil, getProfitColor } from '@/lib/utils'
-import { getOrder, upsertOrder, insertPayment, upsertPayment, deletePayment, upsertExpense, deleteExpense } from '@/lib/data'
+import { getOrder, changeOrderStatus, changeOrderProductionStatus, recordOrderPayment, syncOrderPaymentState, upsertPayment, deletePayment, upsertExpense, deleteExpense } from '@/lib/data'
 import { PRODUCTION_STATUSES, ORDER_STATUSES, PAYMENT_TYPES, PAYMENT_METHODS, EXPENSE_TYPES } from '@/lib/constants'
 import type { Order, Payment, Expense } from '@/lib/types'
 import { ArrowRight, ExternalLink, Plus, CheckCircle, Circle, Calendar, AlertTriangle, Pencil, Trash2, X, Check } from 'lucide-react'
@@ -82,9 +82,16 @@ export default function OrderDetailPage() {
   const handleStatusChange = useCallback(async (field: 'order_status' | 'production_status', value: string) => {
     if (!order) return
     try {
-      const updated = await upsertOrder({ ...order, [field]: value })
-      setOrder(o => o ? { ...o, [field]: updated[field] } : o)
-      toast({ type: 'success', title: 'סטטוס עודכן' })
+      const updated = field === 'order_status'
+        ? await changeOrderStatus(order, value)
+        : await changeOrderProductionStatus(order, value)
+      const autoAdvanced = field === 'production_status' && updated.order_status !== order.order_status
+      setOrder(o => o ? { ...o, order_status: updated.order_status, production_status: updated.production_status } : o)
+      toast({
+        type: 'success',
+        title: 'סטטוס עודכן',
+        description: autoAdvanced ? `סטטוס ההזמנה קודם אוטומטית ל"${updated.order_status}"` : undefined,
+      })
     } catch {
       toast({ type: 'error', title: 'שגיאה בעדכון' })
     }
@@ -95,26 +102,13 @@ export default function OrderDetailPage() {
     setAddingPayment(true)
     try {
       const amount = Number(paymentForm.amount)
-      const newPayment = await insertPayment({
-        order_id: order.id,
-        customer_id: order.customer_id,
+      const { order: synced } = await recordOrderPayment(order, {
         payment_type: paymentForm.payment_type,
         payment_method: paymentForm.payment_method,
         amount,
-        payment_date: new Date().toISOString().split('T')[0],
-        is_paid: true,
         notes: paymentForm.notes,
       })
-      const totalPaid = (order.payments || []).filter(p => p.is_paid).reduce((s, p) => s + p.amount, 0) + amount
-      const newBalance = Math.max(0, order.sale_price - totalPaid)
-      const newPaymentStatus = newBalance === 0 ? 'שולם במלואו' : totalPaid > 0 ? 'שולם חלקית' : 'לא שולם'
-      const updated = await upsertOrder({ ...order, balance_due: newBalance, payment_status: newPaymentStatus })
-      setOrder(o => o ? {
-        ...o,
-        balance_due: updated.balance_due,
-        payment_status: updated.payment_status,
-        payments: [...(o.payments || []), newPayment],
-      } : o)
+      setOrder(synced)
       setPaymentForm({ amount: '', payment_type: 'יתרה', payment_method: 'העברה בנקאית', notes: '' })
       toast({ type: 'success', title: `תשלום של ${formatCurrency(amount)} נרשם` })
     } catch {
@@ -131,11 +125,8 @@ export default function OrderDetailPage() {
 
   const recalcAndSavePayments = useCallback(async (newPayments: Payment[]) => {
     if (!order) return
-    const totalPaid = newPayments.filter(p => p.is_paid).reduce((s, p) => s + p.amount, 0)
-    const newBalance = Math.max(0, order.sale_price - totalPaid)
-    const newPaymentStatus = newBalance === 0 ? 'שולם במלואו' : totalPaid > 0 ? 'שולם חלקית' : 'לא שולם'
-    await upsertOrder({ ...order, balance_due: newBalance, payment_status: newPaymentStatus })
-    setOrder(o => o ? { ...o, payments: newPayments, balance_due: newBalance, payment_status: newPaymentStatus } : o)
+    const synced = await syncOrderPaymentState(order, newPayments)
+    setOrder(synced)
   }, [order])
 
   const handleSaveEditPayment = useCallback(async (paymentId: string) => {
@@ -308,7 +299,7 @@ export default function OrderDetailPage() {
 
         {/* Customer + Supplier */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="bg-white rounded-xl border border-[#e5ddd0] p-4">
+          <div className="glass-card rounded-xl p-4">
             <h2 className="font-semibold text-[#2c1810] mb-2 text-sm">לקוח</h2>
             <div className="flex items-center justify-between">
               <div>
@@ -323,7 +314,7 @@ export default function OrderDetailPage() {
             </div>
           </div>
           {order.suppliers && (
-            <div className="bg-white rounded-xl border border-[#e5ddd0] p-4">
+            <div className="glass-card rounded-xl p-4">
               <h2 className="font-semibold text-[#2c1810] mb-2 text-sm">ספק</h2>
               <p className="font-medium">{order.suppliers.name}</p>
               {order.suppliers.contact_name && <p className="text-xs text-[#7a6a52]">{order.suppliers.contact_name}</p>}
@@ -333,7 +324,7 @@ export default function OrderDetailPage() {
         </div>
 
         {/* Production stepper */}
-        <div className="bg-white rounded-xl border border-[#e5ddd0] p-4">
+        <div className="glass-card rounded-xl p-4">
           <div className="flex items-center justify-between mb-3">
             <h2 className="font-semibold text-[#2c1810] text-sm">שלב ייצור</h2>
             <Select
@@ -349,7 +340,7 @@ export default function OrderDetailPage() {
         </div>
 
         {/* Jewelry specs */}
-        <div className="bg-white rounded-xl border border-[#e5ddd0] p-4">
+        <div className="glass-card rounded-xl p-4">
           <h2 className="font-semibold text-[#2c1810] mb-3 text-sm">פרטי תכשיט</h2>
           {order.description && (
             <p className="text-sm text-[#4a3728] mb-3 bg-[#faf8f5] rounded-lg p-2">{order.description}</p>
@@ -392,7 +383,7 @@ export default function OrderDetailPage() {
         )}
 
         {/* Financial summary */}
-        <div className="bg-white rounded-xl border border-[#e5ddd0] p-4">
+        <div className="glass-card rounded-xl p-4">
           <h2 className="font-semibold text-[#2c1810] mb-3 text-sm">מידע פיננסי</h2>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm">
             <div>
@@ -427,7 +418,7 @@ export default function OrderDetailPage() {
         </div>
 
         {/* Payments */}
-        <div className="bg-white rounded-xl border border-[#e5ddd0] p-4">
+        <div className="glass-card rounded-xl p-4">
           <div className="flex items-center justify-between mb-3">
             <h2 className="font-semibold text-[#2c1810] text-sm">תשלומים מלקוח ({payments.length})</h2>
           </div>
@@ -509,7 +500,7 @@ export default function OrderDetailPage() {
         </div>
 
         {/* Expenses */}
-        <div className="bg-white rounded-xl border border-[#e5ddd0] p-4">
+        <div className="glass-card rounded-xl p-4">
           <div className="flex items-center justify-between mb-3">
             <div>
               <h2 className="font-semibold text-[#2c1810] text-sm">הוצאות ({expenses.length})</h2>
@@ -621,7 +612,7 @@ export default function OrderDetailPage() {
         </div>
 
         {/* Status change */}
-        <div className="bg-white rounded-xl border border-[#e5ddd0] p-4">
+        <div className="glass-card rounded-xl p-4">
           <h2 className="font-semibold text-[#2c1810] mb-3 text-sm">עדכון סטטוס הזמנה</h2>
           <div className="flex gap-2 flex-wrap">
             {ORDER_STATUSES.map(s => (
@@ -639,7 +630,7 @@ export default function OrderDetailPage() {
 
         {/* Notes */}
         {order.notes && (
-          <div className="bg-white rounded-xl border border-[#e5ddd0] p-4 pb-6">
+          <div className="glass-card rounded-xl p-4 pb-6">
             <h2 className="font-semibold text-[#2c1810] mb-2 text-sm">הערות</h2>
             <p className="text-sm text-[#4a3728] whitespace-pre-wrap">{order.notes}</p>
           </div>

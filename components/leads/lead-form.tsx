@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Dialog, DialogHeader, DialogBody, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -10,7 +10,7 @@ import { FormField, FormGrid, FormSection } from '@/components/ui/form-field'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { LEAD_STATUSES, LEAD_PRIORITIES, SOURCES, JEWELRY_TYPES, DIAMOND_TYPES, GOLD_TYPES, GOLD_COLORS } from '@/lib/constants'
 import { isValidIsraeliMobilePhone, isValidEmail, normalizeIsraeliPhone, PHONE_ERROR, EMAIL_ERROR } from '@/lib/validation'
-import { useUnsavedChanges } from '@/lib/hooks'
+import { useUnsavedChanges, useResetOnOpen } from '@/lib/hooks'
 import type { Lead, Customer } from '@/lib/types'
 
 interface LeadFormProps {
@@ -26,15 +26,12 @@ const DEFAULTS: Partial<Lead> = { lead_status: 'חדש', priority: 'בינוני
 export function LeadForm({ open, onClose, lead, customers = [], onSave }: LeadFormProps) {
   const [form, setForm] = useState<Partial<Lead>>(lead || DEFAULTS)
   const [errors, setErrors] = useState<Record<string, string>>({})
-  const { isDirtyRef, confirmClose, setConfirmClose, markDirty, markClean, tryClose, confirmAndClose } = useUnsavedChanges(open)
+  const { isDirtyRef, confirmClose, setConfirmClose, markDirty, tryClose, confirmAndClose } = useUnsavedChanges(open)
 
-  useEffect(() => {
-    if (open) {
-      setForm(lead || DEFAULTS)
-      setErrors({})
-      markClean()
-    }
-  }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
+  useResetOnOpen(open, () => {
+    setForm(lead || DEFAULTS)
+    setErrors({})
+  })
 
   const set = (key: keyof Lead, value: string | number) => {
     setForm(f => ({ ...f, [key]: value }))

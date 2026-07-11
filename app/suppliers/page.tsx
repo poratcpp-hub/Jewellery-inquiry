@@ -13,7 +13,7 @@ import { FormField, FormGrid, FormSection } from '@/components/ui/form-field'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { TableSkeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
-import { useUnsavedChanges } from '@/lib/hooks'
+import { useUnsavedChanges, useResetOnOpen } from '@/lib/hooks'
 import { isValidIsraeliMobilePhone, normalizeIsraeliPhone, PHONE_ERROR } from '@/lib/validation'
 import { getSuppliers, upsertSupplier, deleteSupplier } from '@/lib/data'
 import { SUPPLIER_CATEGORIES } from '@/lib/constants'
@@ -49,11 +49,9 @@ function SupplierForm({ open, onClose, supplier, onSave }: {
 }) {
   const [form, setForm] = useState<Partial<Supplier>>(supplier || {})
   const [errors, setErrors] = useState<Record<string, string>>({})
-  const { isDirtyRef, confirmClose, setConfirmClose, markDirty, markClean, tryClose, confirmAndClose } = useUnsavedChanges(open)
+  const { isDirtyRef, confirmClose, setConfirmClose, markDirty, tryClose, confirmAndClose } = useUnsavedChanges(open)
 
-  useEffect(() => {
-    if (open) { setForm(supplier || {}); setErrors({}); markClean() }
-  }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
+  useResetOnOpen(open, () => { setForm(supplier || {}); setErrors({}) })
 
   const set = (k: keyof Supplier, v: string | number) => {
     setForm(f => ({ ...f, [k]: v }))
@@ -163,7 +161,7 @@ export default function SuppliersPage() {
   const filtered = useMemo(() => {
     const q = search.toLowerCase()
     return suppliers.filter(s =>
-      s.name.toLowerCase().includes(q) ||
+      (s.name || '').toLowerCase().includes(q) ||
       (s.category || '').toLowerCase().includes(q) ||
       (s.location || '').includes(q)
     )
@@ -216,7 +214,7 @@ export default function SuppliersPage() {
           <Input className="pr-9" placeholder="חיפוש לפי שם, קטגוריה, מיקום..." value={search} onChange={e => setSearch(e.target.value)} />
         </div>
 
-        <div className="bg-white rounded-xl border border-[#e5ddd0] shadow-[0_1px_8px_rgba(26,18,9,0.06)] overflow-hidden">
+        <div className="glass-card rounded-xl overflow-hidden">
           {loading ? <TableSkeleton rows={4} cols={6} /> : (
             <Table>
               <TableHeader>

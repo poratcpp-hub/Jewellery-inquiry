@@ -9,7 +9,7 @@ interface RecentOrdersProps {
 
 export const RecentOrders = React.memo(function RecentOrders({ orders }: RecentOrdersProps) {
   return (
-    <div className="rounded-xl bg-white border border-[#e5ddd0] shadow-[0_1px_8px_rgba(26,18,9,0.06)]">
+    <div className="glass-card rounded-xl">
       <div className="p-5 border-b border-[#e5ddd0]">
         <h3 className="font-semibold text-[#2c1810]">הזמנות אחרונות</h3>
       </div>

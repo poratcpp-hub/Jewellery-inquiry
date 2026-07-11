@@ -234,7 +234,7 @@ export default function LeadDetailPage() {
         )}
 
         {/* Contact details */}
-        <div className="bg-white rounded-xl border border-[#e5ddd0] p-4">
+        <div className="glass-card rounded-xl p-4">
           <h2 className="font-semibold text-[#2c1810] mb-3 text-sm">פרטי קשר</h2>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
             <div>
@@ -274,14 +274,14 @@ export default function LeadDetailPage() {
 
         {/* Original message */}
         {lead.original_message && (
-          <div className="bg-white rounded-xl border border-[#e5ddd0] p-4">
+          <div className="glass-card rounded-xl p-4">
             <h2 className="font-semibold text-[#2c1810] mb-2 text-sm">הודעת הפנייה המקורית</h2>
             <p className="text-sm text-[#4a3728] whitespace-pre-wrap leading-relaxed bg-[#faf8f5] rounded-lg p-3">{lead.original_message}</p>
           </div>
         )}
 
         {/* Jewelry details */}
-        <div className="bg-white rounded-xl border border-[#e5ddd0] p-4">
+        <div className="glass-card rounded-xl p-4">
           <h2 className="font-semibold text-[#2c1810] mb-3 text-sm">פרטי תכשיט</h2>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
             {[
@@ -328,7 +328,7 @@ export default function LeadDetailPage() {
 
         {/* Notes */}
         {lead.notes && (
-          <div className="bg-white rounded-xl border border-[#e5ddd0] p-4">
+          <div className="glass-card rounded-xl p-4">
             <h2 className="font-semibold text-[#2c1810] mb-2 text-sm">הערות</h2>
             <p className="text-sm text-[#4a3728] whitespace-pre-wrap">{lead.notes}</p>
           </div>

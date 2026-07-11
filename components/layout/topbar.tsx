@@ -3,8 +3,12 @@
 import { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
-import { Menu, Bell, LogOut, User, ChevronDown, Plus, AlertTriangle, Clock, FileText } from 'lucide-react'
-import { formatDate } from '@/lib/utils'
+import { usePathname } from 'next/navigation'
+import {
+  LayoutDashboard, Users, Target, FileText, ShoppingBag, TrendingUp,
+  Truck, Calendar, Settings, Bell, LogOut, User, Plus, AlertTriangle, Clock,
+} from 'lucide-react'
+import { cn, formatDate } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 import { getLeads, getQuotes } from '@/lib/data'
 
@@ -12,6 +16,18 @@ const IS_DEMO =
   !process.env.NEXT_PUBLIC_SUPABASE_URL ||
   process.env.NEXT_PUBLIC_SUPABASE_URL === 'https://placeholder.supabase.co' ||
   process.env.NEXT_PUBLIC_DEMO_MODE === 'true'
+
+const navItems = [
+  { href: '/', label: 'דשבורד', icon: LayoutDashboard },
+  { href: '/customers', label: 'לקוחות', icon: Users },
+  { href: '/leads', label: 'לידים', icon: Target },
+  { href: '/quotes', label: 'הצעות מחיר', icon: FileText },
+  { href: '/orders', label: 'הזמנות', icon: ShoppingBag },
+  { href: '/financials', label: 'כספים', icon: TrendingUp },
+  { href: '/suppliers', label: 'ספקים', icon: Truck },
+  { href: '/calendar', label: 'מסירות', icon: Calendar },
+  { href: '/settings', label: 'הגדרות', icon: Settings },
+]
 
 interface Alert {
   id: string
@@ -22,12 +38,17 @@ interface Alert {
 }
 
 interface TopbarProps {
-  onMenuClick: () => void
   title?: string
   onNewInquiry?: () => void
 }
 
-export function Topbar({ onMenuClick, title, onNewInquiry }: TopbarProps) {
+/**
+ * Floating dark pill navigation — the whole menu lives in one rounded
+ * capsule at the top; the active page is a gold pill with its label,
+ * inactive pages collapse to icon chips on narrower screens.
+ */
+export function Topbar({ onNewInquiry }: TopbarProps) {
+  const pathname = usePathname()
   const today = formatDate(new Date().toISOString())
   const [userEmail, setUserEmail] = useState<string | null>(null)
   const [menuOpen, setMenuOpen] = useState(false)
@@ -35,6 +56,12 @@ export function Topbar({ onMenuClick, title, onNewInquiry }: TopbarProps) {
   const [alerts, setAlerts] = useState<Alert[]>([])
   const menuRef = useRef<HTMLDivElement>(null)
   const bellRef = useRef<HTMLDivElement>(null)
+  const activeNavRef = useRef<HTMLAnchorElement>(null)
+
+  // Keep the active pill visible when the nav overflows on small screens
+  useEffect(() => {
+    activeNavRef.current?.scrollIntoView({ inline: 'center', block: 'nearest' })
+  }, [pathname])
 
   useEffect(() => {
     if (IS_DEMO) return
@@ -107,114 +134,132 @@ export function Topbar({ onMenuClick, title, onNewInquiry }: TopbarProps) {
   }
 
   return (
-    <header className="h-16 bg-white border-b border-[#e5ddd0] flex items-center justify-between px-4 sm:px-6 sticky top-0 z-20 shadow-[0_1px_4px_rgba(26,18,9,0.04)]">
-      <div className="flex items-center gap-3">
-        <button
-          onClick={onMenuClick}
-          className="lg:hidden p-2 rounded-lg text-[#4a3728] hover:bg-[#f5efe0] transition-colors"
-        >
-          <Menu size={20} />
-        </button>
-        <div className="lg:hidden">
-          <Image src="/porat-logo.svg" alt="PORAT Private Jeweler" width={110} height={44} priority />
-        </div>
-        {title && (
-          <h1 className="text-base font-semibold text-[#2c1810] hidden lg:block">{title}</h1>
-        )}
-      </div>
+    <header className="sticky top-0 z-30 px-3 pt-3 sm:px-6">
+      <div className="glass-card mx-auto flex h-16 max-w-[1440px] items-center gap-2 rounded-2xl px-3 sm:gap-4 sm:px-5">
+        {/* Brand */}
+        <Link href="/" className="hidden shrink-0 sm:block">
+          <Image src="/porat-logo.svg" alt="PORAT Private Jeweler" width={104} height={42} priority />
+        </Link>
 
-      <div className="flex items-center gap-3 mr-auto">
-        {onNewInquiry && (
-          <button
-            onClick={onNewInquiry}
-            className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#b8934a] text-white text-sm font-medium hover:bg-[#a07840] transition-colors shadow-sm"
-          >
-            <Plus size={15} />
-            + ליד חדש
-          </button>
-        )}
-        {IS_DEMO && (
-          <span className="hidden sm:inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700 border border-amber-200">
-            Demo
-          </span>
-        )}
-        <span className="text-sm text-[#7a6a52] hidden sm:block">{today}</span>
+        {/* Floating dark pill menu */}
+        <nav className="no-scrollbar min-w-0 flex-1 overflow-x-auto py-2">
+          <div className="glass-dark mx-auto flex w-max items-center gap-0.5 rounded-full p-1.5">
+            {navItems.map(item => {
+              const Icon = item.icon
+              const isActive = item.href === '/' ? pathname === '/' : pathname.startsWith(item.href)
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  ref={isActive ? activeNavRef : undefined}
+                  title={item.label}
+                  className={cn(
+                    'flex items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-2 text-[13px] font-medium transition-all duration-200',
+                    isActive
+                      ? 'bg-gradient-to-b from-gold-400 to-gold-500 text-white shadow-gold [text-shadow:0_1px_1px_rgba(90,64,20,0.3)]'
+                      : 'text-white/60 hover:bg-white/10 hover:text-white'
+                  )}
+                >
+                  <Icon size={15} className="shrink-0" />
+                  <span className={cn(!isActive && 'hidden xl:inline')}>{item.label}</span>
+                </Link>
+              )
+            })}
+          </div>
+        </nav>
 
-        {/* Notification bell */}
-        <div className="relative" ref={bellRef}>
-          <button
-            onClick={() => setBellOpen(v => !v)}
-            className="relative p-2 rounded-lg text-[#4a3728] hover:bg-[#f5efe0] transition-colors"
-          >
-            <Bell size={18} />
-            {alerts.length > 0 && (
-              <span className="absolute top-1.5 right-1.5 min-w-[16px] h-4 bg-red-500 rounded-full text-white text-[10px] font-bold flex items-center justify-center px-0.5">
-                {alerts.length > 9 ? '9+' : alerts.length}
-              </span>
-            )}
-          </button>
+        {/* Action cluster — round chips like the reference */}
+        <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+          {IS_DEMO && (
+            <span className="hidden items-center rounded-full border border-amber-200 bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700 lg:inline-flex">
+              Demo
+            </span>
+          )}
+          <span className="hidden text-sm text-clay 2xl:block">{today}</span>
 
-          {bellOpen && (
-            <div className="absolute left-0 mt-1 w-80 bg-white rounded-xl border border-[#e5ddd0] shadow-lg z-50 overflow-hidden">
-              <div className="px-4 py-2.5 border-b border-[#f0ebe0] flex items-center justify-between">
-                <p className="text-sm font-semibold text-[#2c1810]">התראות</p>
-                {alerts.length > 0 && (
-                  <span className="px-2 py-0.5 bg-red-100 text-red-700 rounded-full text-xs font-medium">{alerts.length}</span>
+          {onNewInquiry && (
+            <button
+              onClick={onNewInquiry}
+              title="ליד חדש"
+              className="flex h-10 items-center gap-1.5 rounded-full bg-gradient-to-b from-gold-400 to-gold-600 px-3 text-sm font-medium text-white shadow-gold transition-all duration-200 hover:-translate-y-px hover:shadow-gold-hover active:translate-y-0 sm:px-4 [text-shadow:0_1px_1px_rgba(90,64,20,0.3)]"
+            >
+              <Plus size={16} />
+              <span className="hidden md:inline">ליד חדש</span>
+            </button>
+          )}
+
+          {/* Notification bell */}
+          <div className="relative" ref={bellRef}>
+            <button
+              onClick={() => setBellOpen(v => !v)}
+              title="התראות"
+              className="relative flex h-10 w-10 items-center justify-center rounded-full border border-white/70 bg-white/55 text-ink-soft shadow-card backdrop-blur-md transition-all duration-200 hover:border-gold-300 hover:text-gold-600"
+            >
+              <Bell size={17} />
+              {alerts.length > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-0.5 text-[10px] font-bold text-white ring-2 ring-cream">
+                  {alerts.length > 9 ? '9+' : alerts.length}
+                </span>
+              )}
+            </button>
+
+            {bellOpen && (
+              <div className="glass-pop absolute left-0 mt-2 w-80 overflow-hidden rounded-xl animate-dialog-in z-50">
+                <div className="flex items-center justify-between border-b border-[#f0ebe0] px-4 py-2.5">
+                  <p className="text-sm font-semibold text-[#2c1810]">התראות</p>
+                  {alerts.length > 0 && (
+                    <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">{alerts.length}</span>
+                  )}
+                </div>
+                {alerts.length === 0 ? (
+                  <div className="py-6 text-center text-sm text-[#7a6a52]">אין התראות 🎉</div>
+                ) : (
+                  <div className="max-h-72 overflow-y-auto">
+                    {alerts.map(alert => (
+                      <Link key={alert.id} href={alert.href} onClick={() => setBellOpen(false)}>
+                        <div className="flex items-start gap-2.5 border-b border-[#f0ebe0] px-4 py-3 transition-colors last:border-0 hover:bg-[#faf8f5]">
+                          {alertIcon(alert.type)}
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-medium text-[#2c1810]">{alert.title}</p>
+                            <p className="mt-0.5 text-xs text-[#7a6a52]">{alert.subtitle}</p>
+                          </div>
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
                 )}
               </div>
-              {alerts.length === 0 ? (
-                <div className="py-6 text-center text-sm text-[#7a6a52]">אין התראות 🎉</div>
-              ) : (
-                <div className="max-h-72 overflow-y-auto">
-                  {alerts.map(alert => (
-                    <Link key={alert.id} href={alert.href} onClick={() => setBellOpen(false)}>
-                      <div className="flex items-start gap-2.5 px-4 py-3 hover:bg-[#faf8f5] transition-colors border-b border-[#f0ebe0] last:border-0">
-                        {alertIcon(alert.type)}
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-[#2c1810] truncate">{alert.title}</p>
-                          <p className="text-xs text-[#7a6a52] mt-0.5">{alert.subtitle}</p>
-                        </div>
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* User menu */}
-        <div className="relative" ref={menuRef}>
-          <button
-            onClick={() => setMenuOpen(v => !v)}
-            className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-[#f5efe0] transition-colors"
-          >
-            <div className="w-8 h-8 rounded-full bg-[#b8934a] flex items-center justify-center shrink-0">
-              <User size={14} className="text-white" />
-            </div>
-            {!IS_DEMO && userEmail && (
-              <span className="text-xs text-[#4a3728] hidden md:block max-w-[120px] truncate">{userEmail}</span>
             )}
-            {!IS_DEMO && <ChevronDown size={14} className="text-[#7a6a52] hidden md:block" />}
-          </button>
+          </div>
 
-          {menuOpen && !IS_DEMO && (
-            <div className="absolute left-0 mt-1 w-52 bg-white rounded-xl border border-[#e5ddd0] shadow-lg z-50 py-1 overflow-hidden">
-              {userEmail && (
-                <div className="px-4 py-2.5 border-b border-[#f0ebe0]">
-                  <p className="text-xs text-[#7a6a52]">מחובר כ</p>
-                  <p className="text-sm font-medium text-[#2c1810] truncate">{userEmail}</p>
-                </div>
-              )}
-              <button
-                onClick={handleLogout}
-                className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
-              >
-                <LogOut size={15} />
-                יציאה מהמערכת
-              </button>
-            </div>
-          )}
+          {/* User menu */}
+          <div className="relative" ref={menuRef}>
+            <button
+              onClick={() => setMenuOpen(v => !v)}
+              title="חשבון"
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-gold-400 to-gold-600 ring-2 ring-gold-200/70 transition-transform duration-200 hover:scale-105"
+            >
+              <User size={15} className="text-white" />
+            </button>
+
+            {menuOpen && !IS_DEMO && (
+              <div className="glass-pop absolute left-0 mt-2 w-52 overflow-hidden rounded-xl py-1 animate-dialog-in z-50">
+                {userEmail && (
+                  <div className="border-b border-[#f0ebe0] px-4 py-2.5">
+                    <p className="text-xs text-[#7a6a52]">מחובר כ</p>
+                    <p className="truncate text-sm font-medium text-[#2c1810]">{userEmail}</p>
+                  </div>
+                )}
+                <button
+                  onClick={handleLogout}
+                  className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-red-600 transition-colors hover:bg-red-50"
+                >
+                  <LogOut size={15} />
+                  יציאה מהמערכת
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </header>

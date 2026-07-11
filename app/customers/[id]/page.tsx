@@ -65,7 +65,7 @@ export default function CustomerDetailPage() {
   // Use pre-calculated stats if available, fall back to computed
   const totalRevenue = customer.total_revenue ?? orders.reduce((s, o) => s + o.sale_price, 0)
   const totalProfit = customer.total_profit ?? orders.reduce((s, o) => s + o.net_profit, 0)
-  const avgMargin = orders.length > 0 ? orders.reduce((s, o) => s + o.profit_margin, 0) / orders.length : 0
+  const avgMargin = orders.length > 0 ? orders.reduce((s, o) => s + (o.profit_margin || 0), 0) / orders.length : 0
 
   const isVip = customer.customer_status === 'VIP'
 
@@ -88,7 +88,7 @@ export default function CustomerDetailPage() {
         </div>
 
         {/* Info card */}
-        <div className="bg-white rounded-xl border border-[#e5ddd0] p-4">
+        <div className="glass-card rounded-xl p-4">
           <h2 className="font-semibold text-[#2c1810] mb-3 text-sm">פרטי קשר</h2>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
             {customer.phone && (
@@ -156,7 +156,7 @@ export default function CustomerDetailPage() {
         </div>
 
         {/* Tabs */}
-        <div className="bg-white rounded-xl border border-[#e5ddd0] overflow-hidden">
+        <div className="glass-card rounded-xl overflow-hidden">
           <div className="flex border-b border-[#e5ddd0]">
             {([
               { key: 'orders', label: 'הזמנות', count: orders.length, icon: ShoppingBag },
@@ -203,7 +203,7 @@ export default function CustomerDetailPage() {
                           <div className="text-right">
                             <p className="text-sm font-semibold text-[#b8934a]">{formatCurrency(order.sale_price)}</p>
                             {order.profit_margin > 0 && (
-                              <p className={cn('text-xs', getProfitColor(order.profit_margin))}>{order.profit_margin.toFixed(0)}% רווח</p>
+                              <p className={cn('text-xs', getProfitColor(order.profit_margin ?? 0))}>{(order.profit_margin ?? 0).toFixed(0)}% רווח</p>
                             )}
                           </div>
                           <Badge variant={getStatusBadgeVariant(order.order_status)}>{order.order_status}</Badge>

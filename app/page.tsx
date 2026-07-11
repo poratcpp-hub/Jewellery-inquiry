@@ -1,12 +1,10 @@
 'use client'
 
-if (typeof window !== 'undefined') {
-  console.log('[DEBUG FIX ACTIVE] dashboard quotes/orders refactor loaded')
-}
-
 import { useEffect, useState, useMemo } from 'react'
 import { Shell } from '@/components/layout/shell'
 import { MetricCard } from '@/components/dashboard/metric-card'
+import { CashflowChart, type CashflowMonth } from '@/components/dashboard/cashflow-chart'
+import { OpenBalances } from '@/components/dashboard/open-balances'
 import { RecentOrders } from '@/components/dashboard/recent-orders'
 import { UpcomingDeliveries } from '@/components/dashboard/upcoming-deliveries'
 import { MetricsSkeleton } from '@/components/ui/skeleton'
@@ -14,8 +12,7 @@ import { useToast } from '@/components/ui/toast'
 import Link from 'next/link'
 import { TrendingUp, TrendingDown, DollarSign, ShoppingBag, FileText, Target, AlertCircle, Calendar, ArrowLeft, AlertTriangle, Clock, WifiOff } from 'lucide-react'
 import { formatCurrency, formatDate } from '@/lib/utils'
-import { getPayments, getExpenses, getLeads, getQuotes, getOrders, getCustomers, checkDatabaseConnection, logSupabaseError } from '@/lib/data'
-import { supabase } from '@/lib/supabase'
+import { getPayments, getExpenses, getLeads, getQuotes, getOrders, getCustomers, checkDatabaseConnection, autoExpireQuotes, logSupabaseError } from '@/lib/data'
 import type { DashboardMetrics, Order, Lead, Quote } from '@/lib/types'
 import { CLOSED_ORDER_STATUSES, CLOSED_QUOTE_STATUSES, CLOSED_LEAD_STATUSES } from '@/lib/constants'
 
@@ -147,7 +144,7 @@ function ConversionFunnel({ leads, quotes, orders }: { leads: Lead[], quotes: Qu
   }, [leads, quotes, orders])
 
   return (
-    <div className="bg-white rounded-xl border border-[#e5ddd0] shadow-[0_1px_8px_rgba(26,18,9,0.06)] p-5">
+    <div className="glass-card rounded-xl p-5">
       <h3 className="text-sm font-semibold text-[#2c1810] mb-4">משפך המרות</h3>
       <div className="flex items-center gap-2">
         {steps.map((step, i) => (
@@ -181,6 +178,8 @@ export default function DashboardPage() {
   const [allLeads, setAllLeads] = useState<Lead[]>([])
   const [allQuotes, setAllQuotes] = useState<Quote[]>([])
   const [allOrders, setAllOrders] = useState<Order[]>([])
+  const [chartData, setChartData] = useState<CashflowMonth[]>([])
+  const [trends, setTrends] = useState<{ revenue?: number; expenses?: number; profit?: number }>({})
   const [loading, setLoading] = useState(true)
   const [dbError, setDbError] = useState<string | null>(null)
 
@@ -197,24 +196,7 @@ export default function DashboardPage() {
         return
       }
 
-      // Step 2: explicit quotes/orders simple health checks
-      const { data: quotesHealth, error: quotesHealthError } = await supabase
-        .from('quotes').select('id').limit(1)
-      if (quotesHealthError) {
-        logSupabaseError('quotes simple health check failed', quotesHealthError)
-      } else {
-        console.log('[Supabase] ✅ quotes simple query OK', quotesHealth)
-      }
-
-      const { data: ordersHealth, error: ordersHealthError } = await supabase
-        .from('orders').select('id').limit(1)
-      if (ordersHealthError) {
-        logSupabaseError('orders simple health check failed', ordersHealthError)
-      } else {
-        console.log('[Supabase] ✅ orders simple query OK', ordersHealth)
-      }
-
-      // Step 3: load all data in parallel, tolerating partial failures
+      // Step 2: load all data in parallel, tolerating partial failures
       const [paymentsR, expensesR, leadsR, quotesR, ordersR, customersR] = await Promise.allSettled([
         getPayments(), getExpenses(), getLeads(), getQuotes(), getOrders(), getCustomers(),
       ])
@@ -222,9 +204,12 @@ export default function DashboardPage() {
       const payments  = paymentsR.status  === 'fulfilled' ? paymentsR.value  : []
       const expenses  = expensesR.status  === 'fulfilled' ? expensesR.value  : []
       const leads     = leadsR.status     === 'fulfilled' ? leadsR.value     : []
-      const quotes    = quotesR.status    === 'fulfilled' ? quotesR.value    : []
+      const rawQuotes = quotesR.status    === 'fulfilled' ? quotesR.value    : []
       const orders    = ordersR.status    === 'fulfilled' ? ordersR.value    : []
       const customers = customersR.status === 'fulfilled' ? customersR.value : []
+
+      // Expire stale quotes before computing metrics so "open quotes" is truthful
+      const quotes = await autoExpireQuotes(rawQuotes).catch(() => rawQuotes)
 
       // Log any individual full-query failures via logSupabaseError
       const results = [
@@ -254,6 +239,41 @@ export default function DashboardPage() {
       const monthlyExpenses = expenses
         .filter(e => e.is_paid && new Date(e.expense_date) >= monthStart)
         .reduce((s, e) => s + e.amount, 0)
+
+      // Month-over-month trends + 6-month cashflow series for the chart
+      const monthWindow = (offset: number) => {
+        const start = new Date(now.getFullYear(), now.getMonth() - offset, 1)
+        const end = new Date(now.getFullYear(), now.getMonth() - offset + 1, 1)
+        return (dateStr: string) => { const d = new Date(dateStr); return d >= start && d < end }
+      }
+      const incomeIn = (offset: number) => {
+        const inRange = monthWindow(offset)
+        return payments.filter(p => p.is_paid && inRange(p.payment_date)).reduce((s, p) => s + p.amount, 0)
+      }
+      const expenseIn = (offset: number) => {
+        const inRange = monthWindow(offset)
+        return expenses.filter(e => e.is_paid && inRange(e.expense_date)).reduce((s, e) => s + e.amount, 0)
+      }
+      const prevRevenue = incomeIn(1)
+      const prevExpenses = expenseIn(1)
+      const prevProfit = prevRevenue - prevExpenses
+      const pct = (cur: number, prev: number) =>
+        prev !== 0 ? Math.round(((cur - prev) / Math.abs(prev)) * 100) : undefined
+      setTrends({
+        revenue: pct(monthlyRevenue, prevRevenue),
+        expenses: pct(monthlyExpenses, prevExpenses),
+        profit: pct(monthlyRevenue - monthlyExpenses, prevProfit),
+      })
+
+      const monthFmt = new Intl.DateTimeFormat('he-IL', { month: 'short' })
+      setChartData(Array.from({ length: 6 }, (_, i) => {
+        const offset = 5 - i
+        return {
+          label: monthFmt.format(new Date(now.getFullYear(), now.getMonth() - offset, 1)),
+          income: incomeIn(offset),
+          expense: expenseIn(offset),
+        }
+      }))
 
       setMetrics({
         monthlyRevenue,
@@ -296,9 +316,10 @@ export default function DashboardPage() {
   return (
     <Shell title="דשבורד">
       <div className="max-w-7xl mx-auto space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold text-[#2c1810]">שלום, ברוכים הבאים 👋</h1>
-          <p className="text-[#7a6a52] text-sm mt-0.5">PORAT Private Jeweler · סקירה כללית לחודש הנוכחי</p>
+        <div className="animate-rise-in">
+          <h1 className="font-display text-[1.8rem] leading-tight font-semibold text-ink">שלום, ברוכים הבאים 👋</h1>
+          <div className="mt-2 mb-1 h-0.5 w-12 rounded-full bg-gradient-to-l from-gold-400 to-gold-600" />
+          <p className="text-clay text-sm mt-1.5 tracking-wide">PORAT Private Jeweler · סקירה כללית לחודש הנוכחי</p>
         </div>
 
         {dbError && <DbErrorBanner error={dbError} />}
@@ -306,14 +327,29 @@ export default function DashboardPage() {
         {loading ? <MetricsSkeleton /> : (
           <>
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              <MetricCard title="הכנסות החודש" value={formatCurrency(metrics?.monthlyRevenue ?? 0)} subtitle="תשלומים שהתקבלו" variant="gold" icon={<DollarSign size={20} />} />
-              <MetricCard title="הוצאות החודש" value={formatCurrency(metrics?.monthlyExpenses ?? 0)} subtitle="הוצאות מאושרות" variant="warning" icon={<TrendingDown size={20} />} />
+              <MetricCard
+                title="הכנסות החודש"
+                value={formatCurrency(metrics?.monthlyRevenue ?? 0)}
+                subtitle="תשלומים שהתקבלו"
+                variant="gold"
+                icon={<DollarSign size={20} />}
+                trend={trends.revenue !== undefined ? { value: trends.revenue, label: 'מהחודש שעבר' } : undefined}
+              />
+              <MetricCard
+                title="הוצאות החודש"
+                value={formatCurrency(metrics?.monthlyExpenses ?? 0)}
+                subtitle="הוצאות מאושרות"
+                variant="warning"
+                icon={<TrendingDown size={20} />}
+                trend={trends.expenses !== undefined ? { value: trends.expenses, label: 'מהחודש שעבר' } : undefined}
+              />
               <MetricCard
                 title="רווח נקי"
                 value={formatCurrency(metrics?.monthlyProfit ?? 0)}
                 subtitle={(metrics?.monthlyRevenue ?? 0) > 0 ? `${(((metrics?.monthlyProfit ?? 0) / (metrics?.monthlyRevenue ?? 1)) * 100).toFixed(1)}% מרווח` : '—'}
                 variant={(metrics?.monthlyProfit ?? 0) >= 0 ? 'success' : 'danger'}
                 icon={<TrendingUp size={20} />}
+                trend={trends.profit !== undefined ? { value: trends.profit, label: 'מהחודש שעבר' } : undefined}
               />
               <MetricCard title="יתרה לגביה" value={formatCurrency(metrics?.unpaidBalance ?? 0)} subtitle="מהזמנות פתוחות" variant={(metrics?.unpaidBalance ?? 0) > 0 ? 'danger' : 'success'} icon={<AlertCircle size={20} />} />
             </div>
@@ -323,6 +359,11 @@ export default function DashboardPage() {
               <MetricCard title="הצעות מחיר" value={String(metrics?.openQuotes ?? 0)} subtitle="טיוטות ונשלחות" icon={<FileText size={20} />} />
               <MetricCard title="לידים פעילים" value={String(metrics?.activeLeads ?? 0)} subtitle="מחכים לטיפול" icon={<Target size={20} />} />
               <MetricCard title="מסירות קרובות" value={String(metrics?.upcomingDeliveries ?? 0)} subtitle="14 הימים הקרובים" variant={(metrics?.upcomingDeliveries ?? 0) > 0 ? 'warning' : 'default'} icon={<Calendar size={20} />} />
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+              <div className="lg:col-span-3"><CashflowChart data={chartData} /></div>
+              <div className="lg:col-span-2"><OpenBalances orders={allOrders} /></div>
             </div>
 
             <AlertsWidget leads={allLeads} quotes={allQuotes} orders={allOrders} />

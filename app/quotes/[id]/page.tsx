@@ -9,8 +9,8 @@ import { Badge, getStatusBadgeVariant } from '@/components/ui/badge'
 import { Select } from '@/components/ui/select'
 import { useToast } from '@/components/ui/toast'
 import { QuoteForm } from '@/components/quotes/quote-form'
-import { formatCurrency, formatDate, generateOrderNumber, getProfitColor } from '@/lib/utils'
-import { getQuote, upsertQuote, upsertOrder, getCustomers, findCustomerByContact, upsertCustomer, upsertLead, refreshCustomerStats } from '@/lib/data'
+import { formatCurrency, formatDate, getProfitColor } from '@/lib/utils'
+import { getQuote, upsertQuote, getCustomers, changeQuoteStatus, createOrderFromLeadOrQuote } from '@/lib/data'
 import { getDealQuality, generateQuoteMessage } from '@/lib/workflow'
 import { QUOTE_STATUSES } from '@/lib/constants'
 import type { Quote, Customer } from '@/lib/types'
@@ -54,9 +54,16 @@ export default function QuoteDetailPage() {
   const handleStatusChange = useCallback(async (newStatus: string) => {
     if (!quote) return
     try {
-      const updated = await upsertQuote({ ...quote, quote_status: newStatus })
-      setQuote(q => q ? { ...q, quote_status: updated.quote_status } : q)
-      toast({ type: 'success', title: 'סטטוס עודכן' })
+      const result = await changeQuoteStatus(quote, newStatus)
+      setQuote(q => q ? { ...q, ...result.quote, customers: q.customers, leads: q.leads } : q)
+      toast({
+        type: 'success',
+        title: result.order ? 'ההצעה אושרה — נפתחה הזמנה' : 'סטטוס עודכן',
+        description: result.order
+          ? `הזמנה ${result.order.order_number}${result.orderCreated ? ' נוצרה אוטומטית כולל רישום העלויות בהוצאות' : ' כבר מקושרת'}`
+          : newStatus === 'נשלחה ללקוח' && quote.lead_id
+            ? 'הליד עודכן ונקבע מעקב אוטומטי בעוד 3 ימים' : undefined,
+      })
     } catch {
       toast({ type: 'error', title: 'שגיאה בעדכון סטטוס' })
     }
@@ -66,71 +73,20 @@ export default function QuoteDetailPage() {
     if (!quote) return
     setConverting(true)
     try {
-      const lead = quote.leads
-
-      // Find or create customer
-      let customer = quote.customers || null
-      if (!customer) {
-        customer = await findCustomerByContact(
-          lead?.phone || undefined,
-          lead?.instagram || undefined,
-          lead?.email || undefined,
-        )
-      }
-      if (!customer) {
-        customer = await upsertCustomer({
-          full_name: lead?.full_name || 'לקוח חדש',
-          phone: lead?.phone || undefined,
-          instagram: lead?.instagram || undefined,
-          email: lead?.email || undefined,
-          source: lead?.source || undefined,
-          customer_status: 'לקוח חדש',
-        })
-        toast({ type: 'success', title: 'לקוח חדש נוצר', description: `"${customer.full_name}" נוסף לרשימת הלקוחות` })
-      }
-
-      // Create order
-      const order = await upsertOrder({
-        order_number: generateOrderNumber(),
-        customer_id: customer.id,
-        quote_id: quote.id,
-        lead_id: lead?.id || undefined,
-        jewelry_type: quote.jewelry_type,
-        description: quote.description,
-        diamond_type: quote.diamond_type,
-        diamond_origin: quote.diamond_origin,
-        diamond_certificate: quote.diamond_certificate,
-        gold_type: quote.gold_type,
-        gold_color: quote.gold_color,
-        carat: quote.carat,
-        order_status: 'מחכה למקדמה',
-        payment_status: 'לא שולם',
-        sale_price: quote.sale_price,
-        deposit_amount: 0,
-        balance_due: quote.sale_price,
-        total_cost: quote.total_cost,
-        net_profit: quote.expected_profit,
-        profit_margin: quote.profit_margin,
-      })
-
-      // Update quote and lead atomically
-      await Promise.all([
-        upsertQuote({ ...quote, quote_status: 'אושרה', order_id: order.id, customer_id: customer.id }),
-        lead?.id ? upsertLead({
-          ...lead,
-          lead_status: 'נסגר להזמנה',
-          order_id: order.id,
-          customer_id: customer.id,
-        }) : Promise.resolve(),
-      ])
-
-      await refreshCustomerStats(customer.id)
-
-      setQuote(q => q ? { ...q, quote_status: 'אושרה', order_id: order.id, customer_id: customer!.id, customers: customer! } : q)
+      // Single conversion path shared with the leads flow: finds/creates the
+      // customer, creates the order, links quote + lead, refreshes stats.
+      const { order, alreadyExisted } = await createOrderFromLeadOrQuote({ quoteId: quote.id })
+      setQuote(q => q ? {
+        ...q,
+        quote_status: 'אושרה',
+        order_id: order.id,
+        customer_id: order.customer_id,
+        customers: q.customers ?? order.customers,
+      } : q)
       toast({
-        type: 'success',
-        title: 'הזמנה נוצרה!',
-        description: `הזמנה ${order.order_number} נפתחה ומחכה למקדמה`,
+        type: alreadyExisted ? 'info' : 'success',
+        title: alreadyExisted ? 'כבר קיימת הזמנה להצעה זו' : 'הזמנה נוצרה!',
+        description: `הזמנה ${order.order_number} ${alreadyExisted ? 'מקושרת להצעה' : 'נפתחה ומחכה למקדמה'}`,
       })
     } catch (err) {
       console.error(err)
@@ -215,7 +171,7 @@ export default function QuoteDetailPage() {
         )}
 
         {/* Customer card */}
-        <div className="bg-white rounded-xl border border-[#e5ddd0] p-4">
+        <div className="glass-card rounded-xl p-4">
           <h2 className="font-semibold text-[#2c1810] mb-3 text-sm">לקוח</h2>
           <div className="flex items-center justify-between">
             <div>
@@ -238,7 +194,7 @@ export default function QuoteDetailPage() {
         </div>
 
         {/* Jewelry details */}
-        <div className="bg-white rounded-xl border border-[#e5ddd0] p-4">
+        <div className="glass-card rounded-xl p-4">
           <h2 className="font-semibold text-[#2c1810] mb-3 text-sm">פרטי תכשיט</h2>
           {quote.description && (
             <p className="text-sm text-[#4a3728] mb-3 bg-[#faf8f5] rounded-lg p-2">{quote.description}</p>
@@ -260,7 +216,7 @@ export default function QuoteDetailPage() {
 
         {/* Diamond details */}
         {(quote.diamond_type || quote.carat) && (
-          <div className="bg-white rounded-xl border border-[#e5ddd0] p-4">
+          <div className="glass-card rounded-xl p-4">
             <h2 className="font-semibold text-[#2c1810] mb-3 text-sm">פרטי יהלום</h2>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
               {[
@@ -282,7 +238,7 @@ export default function QuoteDetailPage() {
         )}
 
         {/* Cost breakdown */}
-        <div className="bg-white rounded-xl border border-[#e5ddd0] p-4">
+        <div className="glass-card rounded-xl p-4">
           <h2 className="font-semibold text-[#2c1810] mb-3 text-sm">עלויות ורווח</h2>
           <div className="space-y-1.5 mb-4">
             {COST_ROWS.filter(r => (quote[r.key] || 0) > 0).map(({ key, label }) => (
@@ -310,7 +266,7 @@ export default function QuoteDetailPage() {
             <div>
               <p className="text-xs text-[#7a6a52] mb-0.5">מרווח</p>
               <p className={cn('font-bold text-sm', getProfitColor(quote.profit_margin))}>
-                {quote.profit_margin.toFixed(1)}%
+                {(quote.profit_margin ?? 0).toFixed(1)}%
               </p>
             </div>
             <div>
@@ -322,7 +278,7 @@ export default function QuoteDetailPage() {
 
         {/* Notes */}
         {quote.notes && (
-          <div className="bg-white rounded-xl border border-[#e5ddd0] p-4">
+          <div className="glass-card rounded-xl p-4">
             <h2 className="font-semibold text-[#2c1810] mb-2 text-sm">הערות</h2>
             <p className="text-sm text-[#4a3728] whitespace-pre-wrap">{quote.notes}</p>
           </div>

@@ -62,7 +62,7 @@ export default function CustomersPage() {
     if (!search) return customers
     const q = search.toLowerCase()
     return customers.filter(c =>
-      c.full_name.toLowerCase().includes(q) ||
+      (c.full_name || '').toLowerCase().includes(q) ||
       (c.phone || '').includes(q) ||
       (c.instagram || '').toLowerCase().includes(q) ||
       (c.city || '').includes(q)
@@ -158,7 +158,7 @@ export default function CustomersPage() {
           <Input className="pr-9" placeholder="חיפוש לפי שם, טלפון, אינסטגרם, עיר..." onChange={e => handleSearch(e.target.value)} />
         </div>
 
-        <div className="bg-white rounded-xl border border-[#e5ddd0] shadow-[0_1px_8px_rgba(26,18,9,0.06)] overflow-hidden">
+        <div className="glass-card rounded-xl overflow-hidden">
           {loading ? <TableSkeleton rows={5} cols={6} /> : (
             <Table>
               <TableHeader>
