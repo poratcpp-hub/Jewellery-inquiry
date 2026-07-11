@@ -146,6 +146,14 @@ input[type='number']::-webkit-outer-spin-button {
   -webkit-appearance: none;
 }
 
+/* Hide the scrollbar on the pill nav while keeping it scrollable */
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
 /* Respect users who prefer less motion */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
