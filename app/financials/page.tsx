@@ -438,9 +438,9 @@ export default function FinancialsPage() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>תאריך</TableHead>
-                      <TableHead>ספק</TableHead>
+                      <TableHead>לקוח / הזמנה</TableHead>
                       <TableHead className="hidden sm:table-cell">סוג</TableHead>
-                      <TableHead className="hidden md:table-cell">הזמנה</TableHead>
+                      <TableHead className="hidden md:table-cell">ספק</TableHead>
                       <TableHead>סכום</TableHead>
                       <TableHead>שולם</TableHead>
                       <TableHead className="hidden lg:table-cell">הערות</TableHead>
@@ -456,11 +456,18 @@ export default function FinancialsPage() {
                     {expenses.map(e => (
                       <TableRow key={e.id}>
                         <TableCell className="text-sm">{formatDate(e.expense_date)}</TableCell>
-                        <TableCell className="font-medium">{e.suppliers?.name || '—'}</TableCell>
-                        <TableCell className="hidden sm:table-cell text-[#7a6a52] text-sm">{e.expense_type || '—'}</TableCell>
-                        <TableCell className="hidden md:table-cell">
-                          {e.orders ? <span className="font-mono text-xs text-[#b8934a]">{e.orders.order_number}</span> : '—'}
+                        <TableCell>
+                          {e.orders ? (
+                            <div>
+                              <div className="font-medium text-ink">{e.orders.customers?.full_name || '—'}</div>
+                              <span className="font-mono text-xs text-[#b8934a]">{e.orders.order_number}</span>
+                            </div>
+                          ) : (
+                            <span className="text-sm text-[#7a6a52]">הוצאה כללית</span>
+                          )}
                         </TableCell>
+                        <TableCell className="hidden sm:table-cell text-[#7a6a52] text-sm">{e.expense_type || '—'}</TableCell>
+                        <TableCell className="hidden md:table-cell text-[#7a6a52] text-sm">{e.suppliers?.name || '—'}</TableCell>
                         <TableCell className="font-semibold text-red-700">{formatCurrency(e.amount)}</TableCell>
                         <TableCell>
                           <Badge variant={e.is_paid ? 'success' : 'warning'}>{e.is_paid ? 'כן' : 'לא'}</Badge>
