@@ -161,7 +161,7 @@ export default function SuppliersPage() {
   const filtered = useMemo(() => {
     const q = search.toLowerCase()
     return suppliers.filter(s =>
-      s.name.toLowerCase().includes(q) ||
+      (s.name || '').toLowerCase().includes(q) ||
       (s.category || '').toLowerCase().includes(q) ||
       (s.location || '').includes(q)
     )

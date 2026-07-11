@@ -62,7 +62,7 @@ export default function CustomersPage() {
     if (!search) return customers
     const q = search.toLowerCase()
     return customers.filter(c =>
-      c.full_name.toLowerCase().includes(q) ||
+      (c.full_name || '').toLowerCase().includes(q) ||
       (c.phone || '').includes(q) ||
       (c.instagram || '').toLowerCase().includes(q) ||
       (c.city || '').includes(q)

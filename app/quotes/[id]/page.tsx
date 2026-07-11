@@ -266,7 +266,7 @@ export default function QuoteDetailPage() {
             <div>
               <p className="text-xs text-[#7a6a52] mb-0.5">מרווח</p>
               <p className={cn('font-bold text-sm', getProfitColor(quote.profit_margin))}>
-                {quote.profit_margin.toFixed(1)}%
+                {(quote.profit_margin ?? 0).toFixed(1)}%
               </p>
             </div>
             <div>

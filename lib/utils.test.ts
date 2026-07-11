@@ -7,6 +7,7 @@ import {
   isOverdue,
   daysUntil,
   formatDate,
+  formatCurrency,
 } from './utils'
 
 afterEach(() => vi.useRealTimers())
@@ -82,5 +83,26 @@ describe('date helpers', () => {
   it('formatDate falls back to a dash for empty input', () => {
     expect(formatDate(null)).toBe('—')
     expect(formatDate(undefined)).toBe('—')
+  })
+
+  it('formatDate falls back to a dash for garbage input', () => {
+    expect(formatDate('not-a-date')).toBe('—')
+  })
+
+  it('daysUntil returns null for an unparseable date', () => {
+    expect(daysUntil('garbage')).toBeNull()
+  })
+})
+
+describe('formatCurrency edge cases', () => {
+  it('never renders NaN — falls back to zero', () => {
+    expect(formatCurrency(undefined)).toBe(formatCurrency(0))
+    expect(formatCurrency(null)).toBe(formatCurrency(0))
+    expect(formatCurrency(NaN)).toBe(formatCurrency(0))
+    expect(formatCurrency(Infinity)).toBe(formatCurrency(0))
+  })
+
+  it('formats a normal amount', () => {
+    expect(formatCurrency(1234)).toContain('1,234')
   })
 })

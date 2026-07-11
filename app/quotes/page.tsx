@@ -50,7 +50,7 @@ export default function QuotesPage() {
   const filtered = useMemo(() => {
     const q = search.toLowerCase()
     return quotes.filter(quote => {
-      const matchSearch = !q || quote.quote_number.toLowerCase().includes(q) ||
+      const matchSearch = !q || (quote.quote_number || '').toLowerCase().includes(q) ||
         (quote.customers?.full_name || '').toLowerCase().includes(q)
       return matchSearch && (!statusFilter || quote.quote_status === statusFilter)
     })
@@ -123,7 +123,7 @@ export default function QuotesPage() {
       קראט: q.carat || '',
       'עלות כוללת': q.total_cost,
       'מחיר מכירה': q.sale_price,
-      'מרווח %': q.profit_margin.toFixed(1),
+      'מרווח %': (q.profit_margin ?? 0).toFixed(1),
       סטטוס: q.quote_status,
       'תוקף עד': q.valid_until || '',
     })))
@@ -191,7 +191,7 @@ export default function QuotesPage() {
                     <TableCell className="font-semibold text-[#2c1810]">{formatCurrency(quote.sale_price)}</TableCell>
                     <TableCell className="hidden md:table-cell">
                       <span className={cn('font-medium text-sm', getProfitColor(quote.profit_margin))}>
-                        {quote.profit_margin.toFixed(1)}%
+                        {(quote.profit_margin ?? 0).toFixed(1)}%
                       </span>
                     </TableCell>
                     <TableCell>

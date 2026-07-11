@@ -65,7 +65,7 @@ export default function CustomerDetailPage() {
   // Use pre-calculated stats if available, fall back to computed
   const totalRevenue = customer.total_revenue ?? orders.reduce((s, o) => s + o.sale_price, 0)
   const totalProfit = customer.total_profit ?? orders.reduce((s, o) => s + o.net_profit, 0)
-  const avgMargin = orders.length > 0 ? orders.reduce((s, o) => s + o.profit_margin, 0) / orders.length : 0
+  const avgMargin = orders.length > 0 ? orders.reduce((s, o) => s + (o.profit_margin || 0), 0) / orders.length : 0
 
   const isVip = customer.customer_status === 'VIP'
 
@@ -203,7 +203,7 @@ export default function CustomerDetailPage() {
                           <div className="text-right">
                             <p className="text-sm font-semibold text-[#b8934a]">{formatCurrency(order.sale_price)}</p>
                             {order.profit_margin > 0 && (
-                              <p className={cn('text-xs', getProfitColor(order.profit_margin))}>{order.profit_margin.toFixed(0)}% רווח</p>
+                              <p className={cn('text-xs', getProfitColor(order.profit_margin ?? 0))}>{(order.profit_margin ?? 0).toFixed(0)}% רווח</p>
                             )}
                           </div>
                           <Badge variant={getStatusBadgeVariant(order.order_status)}>{order.order_status}</Badge>
