@@ -690,6 +690,22 @@ export async function syncOrderPaymentState(order: Order, payments: Payment[]): 
  */
 export async function createOrder(order: Partial<Order>): Promise<Order> {
   const saved = await upsertOrder({ ...order, id: undefined })
+
+  // Book the jewelry cost as an automatic (unpaid) expense so the ledger
+  // tracks it without manual entry. Orders converted from a quote get a
+  // detailed cost breakdown from createExpensesFromQuote instead.
+  const totalCost = Number(order.total_cost ?? 0)
+  if (totalCost > 0 && !order.quote_id) {
+    await insertExpense({
+      order_id: saved.id,
+      supplier_id: saved.supplier_id || undefined,
+      expense_type: 'עבודת ייצור',
+      amount: totalCost,
+      is_paid: false,
+      notes: `עלות תכשיט — נרשם אוטומטית מהזמנה ${saved.order_number}`,
+    }).catch(() => {})
+  }
+
   const deposit = Number(order.deposit_amount ?? 0)
   if (deposit <= 0) return saved
 
@@ -731,6 +747,13 @@ export async function recordOrderPayment(
   order: Order,
   payment: Partial<Payment>,
 ): Promise<{ payment: Payment; order: Order }> {
+  // Callers from list views pass orders without their payments relation —
+  // fetch the existing payments first so the balance math sees all of them.
+  // (Fetched BEFORE the insert so the new payment can't be double-counted.)
+  let existing = order.payments
+  if (!existing) {
+    try { existing = (await getOrder(order.id)).payments ?? [] } catch { existing = [] }
+  }
   const saved = await insertPayment({
     order_id: order.id,
     customer_id: order.customer_id,
@@ -738,7 +761,7 @@ export async function recordOrderPayment(
     payment_date: new Date().toISOString().split('T')[0],
     ...payment,
   })
-  const nextPayments = [...(order.payments ?? []), saved]
+  const nextPayments = [...existing.filter(p => p.id !== saved.id), saved]
   const synced = await syncOrderPaymentState(order, nextPayments)
   return { payment: saved, order: synced }
 }
