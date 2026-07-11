@@ -46,10 +46,14 @@ export const MetricCard = React.memo(function MetricCard({
             <p className={cn('text-xs mt-1', isGold ? 'text-white/75' : 'text-clay')}>{subtitle}</p>
           )}
           {trend && (
-            <div className="flex items-center gap-1 mt-2">
-              <span className={cn('text-xs font-medium', trend.value >= 0
-                ? isGold ? 'text-white/90' : 'text-emerald-600'
-                : isGold ? 'text-white/90' : 'text-red-600'
+            <div className="flex items-center gap-1.5 mt-2">
+              <span className={cn(
+                'inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[11px] font-semibold tabular-nums ring-1 ring-inset',
+                isGold
+                  ? 'bg-white/20 text-white ring-white/25'
+                  : trend.value >= 0
+                    ? 'bg-emerald-50 text-emerald-700 ring-emerald-100'
+                    : 'bg-red-50 text-red-700 ring-red-100'
               )}>
                 {trend.value >= 0 ? '\u2191' : '\u2193'} {Math.abs(trend.value)}%
               </span>

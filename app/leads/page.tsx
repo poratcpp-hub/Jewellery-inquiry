@@ -5,7 +5,7 @@ import { Shell } from '@/components/layout/shell'
 import { PageHeader } from '@/components/layout/page-header'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Select } from '@/components/ui/select'
+import { FilterChips } from '@/components/ui/filter-chips'
 import { Table, TableHeader, TableBody, TableRow, SortableHead, TableCell } from '@/components/ui/table'
 import { LeadForm } from '@/components/leads/lead-form'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
@@ -56,6 +56,12 @@ export default function LeadsPage() {
     () => leads.filter(l => !CLOSED_LEAD_STATUSES.has(l.lead_status)).length,
     [leads]
   )
+
+  const statusCounts = useMemo(() => {
+    const counts: Record<string, number> = {}
+    leads.forEach(l => { counts[l.lead_status] = (counts[l.lead_status] || 0) + 1 })
+    return counts
+  }, [leads])
 
   const handleSave = useCallback(async (data: Partial<Lead>) => {
     try {
@@ -211,15 +217,12 @@ export default function LeadsPage() {
           }
         />
 
-        <div className="flex gap-3 mb-4">
-          <div className="relative flex-1">
+        <div className="space-y-3 mb-4">
+          <div className="relative">
             <Search size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#7a6a52]" />
             <Input className="pr-9" placeholder="חיפוש לפי שם, טלפון..." onChange={e => handleSearch(e.target.value)} />
           </div>
-          <Select className="w-40" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
-            <option value="">כל הסטטוסים</option>
-            {LEAD_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
-          </Select>
+          <FilterChips options={LEAD_STATUSES} value={statusFilter} onChange={setStatusFilter} counts={statusCounts} allCount={leads.length} />
         </div>
 
         <div className="bg-white rounded-xl border border-[#e5ddd0] shadow-[0_1px_8px_rgba(26,18,9,0.06)] overflow-hidden">

@@ -5,7 +5,7 @@ import { Shell } from '@/components/layout/shell'
 import { PageHeader } from '@/components/layout/page-header'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Select } from '@/components/ui/select'
+import { FilterChips } from '@/components/ui/filter-chips'
 import { Badge, getStatusBadgeVariant } from '@/components/ui/badge'
 import { Table, TableHeader, TableBody, TableRow, SortableHead, TableCell } from '@/components/ui/table'
 import { QuoteForm } from '@/components/quotes/quote-form'
@@ -59,6 +59,12 @@ export default function QuotesPage() {
   const { sorted, sortKey, sortDir, toggleSort } = useTableSort<Quote>(filtered, 'created_at', 'desc')
 
   const totalValue = useMemo(() => filtered.reduce((s, q) => s + q.sale_price, 0), [filtered])
+
+  const statusCounts = useMemo(() => {
+    const counts: Record<string, number> = {}
+    quotes.forEach(q => { counts[q.quote_status] = (counts[q.quote_status] || 0) + 1 })
+    return counts
+  }, [quotes])
 
   const handleSave = useCallback(async (data: Partial<Quote>) => {
     try {
@@ -143,15 +149,12 @@ export default function QuotesPage() {
           }
         />
 
-        <div className="flex gap-3 mb-4">
-          <div className="relative flex-1">
+        <div className="space-y-3 mb-4">
+          <div className="relative">
             <Search size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#7a6a52]" />
             <Input className="pr-9" placeholder="חיפוש לפי מספר הצעה, לקוח..." onChange={e => handleSearch(e.target.value)} />
           </div>
-          <Select className="w-40" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
-            <option value="">כל הסטטוסים</option>
-            {QUOTE_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
-          </Select>
+          <FilterChips options={QUOTE_STATUSES} value={statusFilter} onChange={setStatusFilter} counts={statusCounts} allCount={quotes.length} />
         </div>
 
         <div className="bg-white rounded-xl border border-[#e5ddd0] shadow-[0_1px_8px_rgba(26,18,9,0.06)] overflow-hidden">

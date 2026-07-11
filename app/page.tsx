@@ -3,6 +3,8 @@
 import { useEffect, useState, useMemo } from 'react'
 import { Shell } from '@/components/layout/shell'
 import { MetricCard } from '@/components/dashboard/metric-card'
+import { CashflowChart, type CashflowMonth } from '@/components/dashboard/cashflow-chart'
+import { OpenBalances } from '@/components/dashboard/open-balances'
 import { RecentOrders } from '@/components/dashboard/recent-orders'
 import { UpcomingDeliveries } from '@/components/dashboard/upcoming-deliveries'
 import { MetricsSkeleton } from '@/components/ui/skeleton'
@@ -176,6 +178,8 @@ export default function DashboardPage() {
   const [allLeads, setAllLeads] = useState<Lead[]>([])
   const [allQuotes, setAllQuotes] = useState<Quote[]>([])
   const [allOrders, setAllOrders] = useState<Order[]>([])
+  const [chartData, setChartData] = useState<CashflowMonth[]>([])
+  const [trends, setTrends] = useState<{ revenue?: number; expenses?: number; profit?: number }>({})
   const [loading, setLoading] = useState(true)
   const [dbError, setDbError] = useState<string | null>(null)
 
@@ -236,6 +240,41 @@ export default function DashboardPage() {
         .filter(e => e.is_paid && new Date(e.expense_date) >= monthStart)
         .reduce((s, e) => s + e.amount, 0)
 
+      // Month-over-month trends + 6-month cashflow series for the chart
+      const monthWindow = (offset: number) => {
+        const start = new Date(now.getFullYear(), now.getMonth() - offset, 1)
+        const end = new Date(now.getFullYear(), now.getMonth() - offset + 1, 1)
+        return (dateStr: string) => { const d = new Date(dateStr); return d >= start && d < end }
+      }
+      const incomeIn = (offset: number) => {
+        const inRange = monthWindow(offset)
+        return payments.filter(p => p.is_paid && inRange(p.payment_date)).reduce((s, p) => s + p.amount, 0)
+      }
+      const expenseIn = (offset: number) => {
+        const inRange = monthWindow(offset)
+        return expenses.filter(e => e.is_paid && inRange(e.expense_date)).reduce((s, e) => s + e.amount, 0)
+      }
+      const prevRevenue = incomeIn(1)
+      const prevExpenses = expenseIn(1)
+      const prevProfit = prevRevenue - prevExpenses
+      const pct = (cur: number, prev: number) =>
+        prev !== 0 ? Math.round(((cur - prev) / Math.abs(prev)) * 100) : undefined
+      setTrends({
+        revenue: pct(monthlyRevenue, prevRevenue),
+        expenses: pct(monthlyExpenses, prevExpenses),
+        profit: pct(monthlyRevenue - monthlyExpenses, prevProfit),
+      })
+
+      const monthFmt = new Intl.DateTimeFormat('he-IL', { month: 'short' })
+      setChartData(Array.from({ length: 6 }, (_, i) => {
+        const offset = 5 - i
+        return {
+          label: monthFmt.format(new Date(now.getFullYear(), now.getMonth() - offset, 1)),
+          income: incomeIn(offset),
+          expense: expenseIn(offset),
+        }
+      }))
+
       setMetrics({
         monthlyRevenue,
         monthlyExpenses,
@@ -288,14 +327,29 @@ export default function DashboardPage() {
         {loading ? <MetricsSkeleton /> : (
           <>
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              <MetricCard title="הכנסות החודש" value={formatCurrency(metrics?.monthlyRevenue ?? 0)} subtitle="תשלומים שהתקבלו" variant="gold" icon={<DollarSign size={20} />} />
-              <MetricCard title="הוצאות החודש" value={formatCurrency(metrics?.monthlyExpenses ?? 0)} subtitle="הוצאות מאושרות" variant="warning" icon={<TrendingDown size={20} />} />
+              <MetricCard
+                title="הכנסות החודש"
+                value={formatCurrency(metrics?.monthlyRevenue ?? 0)}
+                subtitle="תשלומים שהתקבלו"
+                variant="gold"
+                icon={<DollarSign size={20} />}
+                trend={trends.revenue !== undefined ? { value: trends.revenue, label: 'מהחודש שעבר' } : undefined}
+              />
+              <MetricCard
+                title="הוצאות החודש"
+                value={formatCurrency(metrics?.monthlyExpenses ?? 0)}
+                subtitle="הוצאות מאושרות"
+                variant="warning"
+                icon={<TrendingDown size={20} />}
+                trend={trends.expenses !== undefined ? { value: trends.expenses, label: 'מהחודש שעבר' } : undefined}
+              />
               <MetricCard
                 title="רווח נקי"
                 value={formatCurrency(metrics?.monthlyProfit ?? 0)}
                 subtitle={(metrics?.monthlyRevenue ?? 0) > 0 ? `${(((metrics?.monthlyProfit ?? 0) / (metrics?.monthlyRevenue ?? 1)) * 100).toFixed(1)}% מרווח` : '—'}
                 variant={(metrics?.monthlyProfit ?? 0) >= 0 ? 'success' : 'danger'}
                 icon={<TrendingUp size={20} />}
+                trend={trends.profit !== undefined ? { value: trends.profit, label: 'מהחודש שעבר' } : undefined}
               />
               <MetricCard title="יתרה לגביה" value={formatCurrency(metrics?.unpaidBalance ?? 0)} subtitle="מהזמנות פתוחות" variant={(metrics?.unpaidBalance ?? 0) > 0 ? 'danger' : 'success'} icon={<AlertCircle size={20} />} />
             </div>
@@ -305,6 +359,11 @@ export default function DashboardPage() {
               <MetricCard title="הצעות מחיר" value={String(metrics?.openQuotes ?? 0)} subtitle="טיוטות ונשלחות" icon={<FileText size={20} />} />
               <MetricCard title="לידים פעילים" value={String(metrics?.activeLeads ?? 0)} subtitle="מחכים לטיפול" icon={<Target size={20} />} />
               <MetricCard title="מסירות קרובות" value={String(metrics?.upcomingDeliveries ?? 0)} subtitle="14 הימים הקרובים" variant={(metrics?.upcomingDeliveries ?? 0) > 0 ? 'warning' : 'default'} icon={<Calendar size={20} />} />
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+              <div className="lg:col-span-3"><CashflowChart data={chartData} /></div>
+              <div className="lg:col-span-2"><OpenBalances orders={allOrders} /></div>
             </div>
 
             <AlertsWidget leads={allLeads} quotes={allQuotes} orders={allOrders} />
