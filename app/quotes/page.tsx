@@ -14,7 +14,7 @@ import { TableSkeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
 import { useDebounce, useTableSort } from '@/lib/hooks'
 import { formatCurrency, formatDate, getProfitColor, exportCsv } from '@/lib/utils'
-import { getQuotes, upsertQuote, deleteQuote, getCustomers, autoExpireQuotes, changeQuoteStatus } from '@/lib/data'
+import { getQuotes, saveQuote, deleteQuote, getCustomers, autoExpireQuotes, changeQuoteStatus } from '@/lib/data'
 import { QUOTE_STATUSES } from '@/lib/constants'
 import { InlineStatusSelect } from '@/components/ui/inline-status-select'
 import type { Quote, Customer } from '@/lib/types'
@@ -68,15 +68,24 @@ export default function QuotesPage() {
 
   const handleSave = useCallback(async (data: Partial<Quote>) => {
     try {
-      const saved = await upsertQuote(editing ? { ...editing, ...data } : data)
+      const result = await saveQuote(editing ? { ...editing, ...data } : data)
       const custMap = Object.fromEntries(customers.map(c => [c.id, c]))
-      const enriched = { ...saved, customers: custMap[saved.customer_id || ''] || saved.customers }
+      const enriched = { ...result.quote, customers: custMap[result.quote.customer_id || ''] || result.quote.customers }
       if (editing) {
         setQuotes(prev => prev.map(q => q.id === editing.id ? enriched : q))
-        toast({ type: 'success', title: 'הצעת המחיר עודכנה' })
       } else {
         setQuotes(prev => [{ ...enriched, id: enriched.id || Math.random().toString(36).slice(2) }, ...prev])
-        toast({ type: 'success', title: 'הצעת מחיר חדשה נוצרה' })
+      }
+      if (result.order) {
+        toast({
+          type: 'success',
+          title: editing ? 'ההצעה אושרה — נפתחה הזמנה' : 'הצעה חדשה אושרה — נפתחה הזמנה',
+          description: `הזמנה ${result.order.order_number}${result.orderCreated ? ' נוצרה אוטומטית כולל רישום העלויות בהוצאות' : ' כבר מקושרת'}`,
+        })
+      } else if (result.orderFailed) {
+        toast({ type: 'error', title: 'ההצעה נשמרה אך יצירת ההזמנה נכשלה', description: 'ניתן להמיר להזמנה מדף ההצעה' })
+      } else {
+        toast({ type: 'success', title: editing ? 'הצעת המחיר עודכנה' : 'הצעת מחיר חדשה נוצרה' })
       }
     } catch {
       toast({ type: 'error', title: 'שגיאה בשמירת הצעת המחיר' })

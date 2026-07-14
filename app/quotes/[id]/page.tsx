@@ -10,7 +10,7 @@ import { Select } from '@/components/ui/select'
 import { useToast } from '@/components/ui/toast'
 import { QuoteForm } from '@/components/quotes/quote-form'
 import { formatCurrency, formatDate, getProfitColor } from '@/lib/utils'
-import { getQuote, upsertQuote, getCustomers, changeQuoteStatus, createOrderFromLeadOrQuote } from '@/lib/data'
+import { getQuote, saveQuote, getCustomers, changeQuoteStatus, createOrderFromLeadOrQuote } from '@/lib/data'
 import { getDealQuality, generateQuoteMessage } from '@/lib/workflow'
 import { QUOTE_STATUSES } from '@/lib/constants'
 import type { Quote, Customer } from '@/lib/types'
@@ -99,9 +99,19 @@ export default function QuoteDetailPage() {
   const handleSaveEdit = useCallback(async (data: Partial<Quote>) => {
     if (!quote) return
     try {
-      const updated = await upsertQuote({ ...quote, ...data })
-      setQuote({ ...updated, customers: quote.customers })
-      toast({ type: 'success', title: 'הצעת המחיר עודכנה' })
+      const result = await saveQuote({ ...quote, ...data })
+      setQuote({ ...result.quote, customers: quote.customers, leads: quote.leads })
+      if (result.order) {
+        toast({
+          type: 'success',
+          title: 'ההצעה אושרה — נפתחה הזמנה',
+          description: `הזמנה ${result.order.order_number}${result.orderCreated ? ' נוצרה אוטומטית כולל רישום העלויות בהוצאות' : ' כבר מקושרת'}`,
+        })
+      } else if (result.orderFailed) {
+        toast({ type: 'error', title: 'ההצעה נשמרה אך יצירת ההזמנה נכשלה', description: 'ניתן להמיר להזמנה בכפתור "המר להזמנה"' })
+      } else {
+        toast({ type: 'success', title: 'הצעת המחיר עודכנה' })
+      }
     } catch {
       toast({ type: 'error', title: 'שגיאה בשמירה' })
     }
