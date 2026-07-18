@@ -42,12 +42,14 @@ CI (`.github/workflows/ci.yml`) runs lint → typecheck → test → build (in d
 - **`lib/hooks.ts`** — shared UI hooks (`useUnsavedChanges`, `useResetOnOpen`, `useDebounce`, `useTableSort`).
 - **`components/`** — form dialogs per entity + reusable UI kit under `components/ui/`.
 - **`proxy.ts`** — Supabase-session auth gate for every non-public route (Next.js proxy).
+- **`app/api/whatsapp/webhook/`** + **`lib/whatsapp*.ts`** — WhatsApp Business Cloud API agent: incoming customer messages become leads automatically, and free-form owner messages are parsed by Claude into structured customer + lead records. Setup guide: [`docs/whatsapp-setup.md`](docs/whatsapp-setup.md).
 
 ## Built-in automations
 
 The pipeline maintains itself; these rules run inside `lib/data.ts` so every page behaves the same:
 
 - **New lead → customer**: creating a lead auto-links it to an existing customer by phone/email, or creates one.
+- **WhatsApp → lead** (`lib/whatsapp-agent.ts`): a customer texting the business number opens a lead (source «וואטסאפ», original message preserved; follow-up texts append to the open lead instead of duplicating). The owner texting free-form details gets them AI-parsed into a full customer + lead, with a confirmation reply.
 - **Lead closed → order**: setting a lead to «נסגר להזמנה» auto-creates the order (idempotent — an existing linked order is reused, never duplicated).
 - **Quote approved → order** (`changeQuoteStatus` / `createOrderFromLeadOrQuote`): marking a quote «אושרה» (or clicking «המר להזמנה») creates the order through one shared path — copies specs and pricing, links quote + lead + customer.
 - **Order created → income booked** (`createOrder`): a deposit entered on a new order is recorded automatically as a «מקדמה» payment in the financials ledger — no manual entry.

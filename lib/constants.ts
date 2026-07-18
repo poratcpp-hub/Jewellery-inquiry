@@ -26,7 +26,7 @@ export const DIAMOND_COLORS = ['D', 'E', 'F', 'G', 'H', 'I', 'J', 'K'] as const
 export const DIAMOND_CLARITIES = ['FL', 'IF', 'VVS1', 'VVS2', 'VS1', 'VS2', 'SI1', 'SI2', 'I1'] as const
 export const DIAMOND_CUTS = ['Excellent', 'Very Good', 'Good', 'Fair'] as const
 
-export const SOURCES = ['אינסטגרם', 'פייסבוק', 'המלצה', 'אתר', 'גוגל', 'TikTok', 'אחר'] as const
+export const SOURCES = ['אינסטגרם', 'פייסבוק', 'וואטסאפ', 'המלצה', 'אתר', 'גוגל', 'TikTok', 'אחר'] as const
 export const PAYMENT_TYPES = ['מקדמה', 'יתרה', 'תשלום מלא', 'החזר'] as const
 export const PAYMENT_METHODS = ['מזומן', 'כרטיס אשראי', 'העברה בנקאית', 'ביט', 'פייפאל'] as const
 export const EXPENSE_TYPES = ['יהלום', 'זהב', 'עבודת ייצור', 'שיבוץ', 'אריזה', 'משלוח', 'שיווק', 'אחר'] as const

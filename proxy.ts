@@ -2,7 +2,9 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
-const PUBLIC_PATHS = ['/login', '/register']
+// /api/whatsapp is called by Meta's servers (signature-verified in the route
+// itself) — it must not be redirected to the login page.
+const PUBLIC_PATHS = ['/login', '/register', '/api/whatsapp']
 const IS_DEMO = !process.env.NEXT_PUBLIC_SUPABASE_URL ||
   process.env.NEXT_PUBLIC_SUPABASE_URL === 'https://placeholder.supabase.co' ||
   process.env.NEXT_PUBLIC_DEMO_MODE === 'true'

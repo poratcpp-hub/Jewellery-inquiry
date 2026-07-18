@@ -251,9 +251,12 @@ export async function findOrCreateCustomerFromLead(
 export async function createOrderFromLeadOrQuote({
   leadId,
   quoteId,
+  quote: quoteFallback,
 }: {
   leadId?: string
   quoteId?: string
+  /** Used when the quote can't be re-fetched (e.g. demo mode, just-created rows). */
+  quote?: Quote
 }): Promise<{ order: Order; alreadyExisted: boolean }> {
   let lead: Lead | null = null
   let quote: Quote | null = null
@@ -284,7 +287,7 @@ export async function createOrderFromLeadOrQuote({
   // Resolve quote (prefer explicit quoteId, fallback to lead.quote_id)
   const resolvedQuoteId = quoteId || lead?.quote_id || undefined
   if (resolvedQuoteId) {
-    try { quote = await getQuote(resolvedQuoteId) } catch { /* no quote */ }
+    try { quote = await getQuote(resolvedQuoteId) } catch { quote = quoteFallback ?? null }
   }
 
   // Idempotency on the quote side: an order may already exist for this quote
@@ -476,7 +479,7 @@ export async function changeQuoteStatus(
 ): Promise<{ quote: Quote; order?: Order; orderCreated?: boolean }> {
   // Approving a quote advances the pipeline by itself: create (or reuse) the order
   if (newStatus === 'אושרה' && !quote.order_id) {
-    const { order, alreadyExisted } = await createOrderFromLeadOrQuote({ quoteId: quote.id })
+    const { order, alreadyExisted } = await createOrderFromLeadOrQuote({ quoteId: quote.id, quote })
     return {
       quote: { ...quote, quote_status: 'אושרה', order_id: order.id, customer_id: order.customer_id },
       order,
@@ -502,6 +505,30 @@ export async function changeQuoteStatus(
   }
 
   return { quote: { ...quote, quote_status: updated.quote_status } }
+}
+
+/**
+ * Saves a quote (create or edit) through the pipeline automations: when the
+ * saved status is «אושרה» and no order is linked yet, an order is opened
+ * automatically with the quote's details — the same behavior as
+ * changeQuoteStatus, so the quote form can't bypass it.
+ */
+export async function saveQuote(
+  quote: Partial<Quote>,
+): Promise<{ quote: Quote; order?: Order; orderCreated?: boolean; orderFailed?: boolean }> {
+  const saved = await upsertQuote(quote)
+  if (saved.quote_status !== 'אושרה' || saved.order_id) return { quote: saved }
+  try {
+    const { order, alreadyExisted } = await createOrderFromLeadOrQuote({ quoteId: saved.id, quote: saved })
+    return {
+      quote: { ...saved, order_id: order.id, customer_id: order.customer_id || saved.customer_id },
+      order,
+      orderCreated: !alreadyExisted,
+    }
+  } catch {
+    // The quote itself was saved — surface the order failure without losing it
+    return { quote: saved, orderFailed: true }
+  }
 }
 
 // ─── Orders ──────────────────────────────────────────────────────────────────
